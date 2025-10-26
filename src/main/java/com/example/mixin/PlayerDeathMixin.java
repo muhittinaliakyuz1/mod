@@ -27,7 +27,7 @@ public abstract class PlayerDeathMixin {
 
     @Inject(method = "onDeath", at = @At("HEAD"))
     private void onPlayerDeath(DamageSource damageSource, CallbackInfo ci) {
-        PlayerEntity player = (PlayerEntity)(Object)this;
+        PlayerEntity player = (PlayerEntity) (Object) this;
         World world = getEntityWorld();
 
         if (world.isClient()) return;
@@ -44,18 +44,20 @@ public abstract class PlayerDeathMixin {
             player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
 
             ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
-            heartItem.setCustomName(Text.of("§c❤️ Kalp")); // sadece isim veriyoruz
+            // Use setHoverName for 1.21.10
+            heartItem.setHoverName(Text.literal("§c❤️ Kalp"));
 
             BlockPos deathPos = player.getBlockPos();
             ItemEntity itemEntity = new ItemEntity(
                     world,
-                    deathPos.getX() + 0.5, deathPos.getY(), deathPos.getZ() + 0.5,
+                    deathPos.getX() + 0.5,
+                    deathPos.getY(),
+                    deathPos.getZ() + 0.5,
                     heartItem
             );
             world.spawnEntity(itemEntity);
 
             player.sendMessage(Text.literal("§c❤ Bir kalbiniz düştü! Kalan kalp sayınız: " + (currentHearts - 1)), true);
-
         } else {
             PlayerDataManager.banPlayer(serverPlayer);
         }
