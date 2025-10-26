@@ -1,16 +1,19 @@
 {
-    "required": true,
-    "package": "com.example.mixin",
-    "compatibilityLevel": "JAVA_21",
-    "mixins": [
-        "ExampleMixin",
-        "PlayerDeathMixin"
-    ],
-    "server": [
-        "HeartUseMixin",
-        "PlayerConnectMixin"
-    ],
-    "injectors": {
-        "defaultRequire": 1
-    }
+  "required": true,
+  "package": "com.example.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ExampleMixin",
+    "PlayerDeathMixin"
+  ],
+  "client": [
+    "ClientOnlyMixin"
+  ],
+  "server": [
+    "HeartUseMixin",
+    "PlayerConnectMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }

@@ -18,7 +18,12 @@ import java.util.UUID;
 @Mixin(ServerPlayerEntity.class)
 public class HeartUseMixin {
 
-    @Inject(method = "method_7907", at = @At("HEAD"), cancellable = true) // method_7907 = useItem/interactItem
+    /**
+     * 1.21.10'da PlayerEntity/ServerPlayerEntity'deki useItem methodu artık method_7907 değil,
+     * Yarn mappings ile 'useItem' olarak geçiyor. 
+     * CallbackInfoReturnable ile kullanımı iptal edebiliriz.
+     */
+    @Inject(method = "useItem", at = @At("HEAD"), cancellable = true)
     private void onUseHeart(Hand hand, CallbackInfoReturnable<ActionResult> cir) {
         ServerPlayerEntity player = (ServerPlayerEntity)(Object)this;
 
