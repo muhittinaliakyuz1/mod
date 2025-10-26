@@ -9,6 +9,7 @@ import net.minecraft.item.Items;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -89,60 +90,30 @@ public class CommandRegistry {
                     )
                 )
             );
-
-            dispatcher.register(CommandManager.literal("unban")
-                .then(CommandManager.argument("player", EntityArgumentType.player())
-                    .executes(context -> {
-                        ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
-                        if (!"Kynexis_".equals(executor.getName().getString())) {
-                            executor.sendMessage(Text.literal("§cYou don't have permission!"), true);
-                            return 0;
-                        }
-
-                        ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
-                        UUID targetId = target.getUuid();
-                        
-                        if (!PlayerDataManager.isPlayerBanned(targetId)) {
-                            executor.sendMessage(Text.literal("§c" + target.getName().getString() + " zaten banlı değil!"), true);
-                            return 0;
-                        }
-                        
-                        PlayerDataManager.unbanPlayer(targetId);
-                        
-                        target.getAttributeInstance(EntityAttributes.MAX_HEALTH)
-                            .setBaseValue(20.0);
-                        target.setHealth(20.0f);
-                        
-                        executor.sendMessage(Text.literal("§a" + target.getName().getString() + " banı kaldırıldı ve kalp sayısı sıfırlandı!"), true);
-                        target.sendMessage(Text.literal("§aBanınız kaldırıldı! Kalp sayınız 10'a sıfırlandı."), true);
-                        
-                        return 1;
-                    })
-                )
-            );
         });
     }
-    
+
     private static int giveHearts(ServerPlayerEntity executor, int amount) {
         UUID uuid = executor.getUuid();
         int heartCount = PlayerDataManager.getPlayerHeartCount(uuid);
+
         if (heartCount <= amount) {
             executor.sendMessage(Text.literal("§cYeterli kalbiniz yok! En az " + (amount + 1) + " kalp olmalı."), true);
             return 0;
         }
-        
+
         PlayerDataManager.setPlayerHeartCount(uuid, heartCount - amount);
-        
+
         double newMaxHealth = (heartCount - amount) * 2.0;
         executor.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
         executor.setHealth((float) Math.min(executor.getHealth(), newMaxHealth));
-        
+
         for (int i = 0; i < amount; i++) {
             ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
-            heartItem.setCustomName(Text.literal("§c❤️ Kalp"));
+            heartItem.setCustomName(Text.of("§c❤️ Kalp")); // sadece isim veriyoruz
             executor.getInventory().offerOrDrop(heartItem);
         }
-        
+
         executor.sendMessage(Text.literal("§c❤ " + amount + " kalbinizi verdiniz! Kalan kalp sayınız: " + (heartCount - amount)), true);
         return 1;
     }

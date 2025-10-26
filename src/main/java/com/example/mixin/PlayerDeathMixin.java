@@ -12,44 +12,50 @@ import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
 import java.util.UUID;
 
 @Mixin(PlayerEntity.class)
-public class PlayerDeathMixin {
-    
+public abstract class PlayerDeathMixin {
+
+    @Shadow
+    public abstract World getEntityWorld();
+
     @Inject(method = "onDeath", at = @At("HEAD"))
     private void onPlayerDeath(DamageSource damageSource, CallbackInfo ci) {
         PlayerEntity player = (PlayerEntity)(Object)this;
-        
-        if (player.getWorld().isClient) return;
-        
+        World world = getEntityWorld();
+
+        if (world.isClient()) return;
+
         if (!(player instanceof ServerPlayerEntity serverPlayer)) return;
-        
+
         UUID uuid = player.getUuid();
         int currentHearts = PlayerDataManager.getPlayerHeartCount(uuid);
-        
+
         if (currentHearts > 1) {
             PlayerDataManager.setPlayerHeartCount(uuid, currentHearts - 1);
-            
+
             double newMaxHealth = (currentHearts - 1) * 2.0;
             player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
-            
+
             ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
-            heartItem.setCustomName(Text.literal("§c❤️ Kalp"));
-            
+            heartItem.setCustomName(Text.of("§c❤️ Kalp")); // sadece isim veriyoruz
+
             BlockPos deathPos = player.getBlockPos();
             ItemEntity itemEntity = new ItemEntity(
-                player.getWorld(),
-                deathPos.getX() + 0.5, deathPos.getY(), deathPos.getZ() + 0.5,
-                heartItem
+                    world,
+                    deathPos.getX() + 0.5, deathPos.getY(), deathPos.getZ() + 0.5,
+                    heartItem
             );
-            player.getWorld().spawnEntity(itemEntity);
-            
+            world.spawnEntity(itemEntity);
+
             player.sendMessage(Text.literal("§c❤ Bir kalbiniz düştü! Kalan kalp sayınız: " + (currentHearts - 1)), true);
-            
+
         } else {
             PlayerDataManager.banPlayer(serverPlayer);
         }
