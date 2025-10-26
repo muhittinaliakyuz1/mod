@@ -44,8 +44,8 @@ public abstract class PlayerDeathMixin {
             player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
 
             ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
-            // Use setHoverName for 1.21.10
-            heartItem.setHoverName(Text.literal("§c❤️ Kalp"));
+            // Use setCustomName for 1.21.10
+            heartItem.setCustomName(Text.literal("§c❤️ Kalp"));
 
             BlockPos deathPos = player.getBlockPos();
             ItemEntity itemEntity = new ItemEntity(

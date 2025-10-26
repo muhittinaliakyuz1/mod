@@ -110,8 +110,8 @@ public class CommandRegistry {
 
         for (int i = 0; i < amount; i++) {
             ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
-            // Use setHoverName for 1.21.10
-            heartItem.setHoverName(Text.literal("§c❤️ Kalp"));
+            // Use setCustomName
+            heartItem.setCustomName(Text.literal("§c❤️ Kalp"));
             executor.getInventory().offerOrDrop(heartItem);
         }
 
