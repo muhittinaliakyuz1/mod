@@ -1,0 +1,157 @@
+package com.example;
+
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.minecraft.command.argument.EntityArgumentType;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.server.command.CommandManager;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
+
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
+
+public class CommandRegistry {
+
+    private static final Set<String> immortalPlayers = new HashSet<>();
+
+    public static void registerCommands() {
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+
+            dispatcher.register(CommandManager.literal("immortalize")
+                .then(CommandManager.argument("player", EntityArgumentType.player())
+                    .executes(context -> {
+                        ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                        if (!"Kynexis_".equals(executor.getName().getString())) {
+                            executor.sendMessage(Text.literal("§cYou don't have permission!"), true);
+                            return 0;
+                        }
+
+                        ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
+                        String name = target.getName().getString();
+
+                        if (immortalPlayers.contains(name)) {
+                            immortalPlayers.remove(name);
+                            target.getAbilities().invulnerable = false;
+                            target.sendAbilitiesUpdate();
+                            executor.sendMessage(Text.literal("§c" + name + " is no longer immortal!"), true);
+                            target.sendMessage(Text.literal("§cYou are no longer immortal!"), true);
+                        } else {
+                            immortalPlayers.add(name);
+                            target.getAbilities().invulnerable = true;
+                            target.sendAbilitiesUpdate();
+                            executor.sendMessage(Text.literal("§d" + name + " is now §5immortal!"), true);
+                            target.sendMessage(Text.literal("§dYou are now §5immortal!"), true);
+                        }
+                        return 1;
+                    }))
+            );
+
+            dispatcher.register(CommandManager.literal("immortallist")
+                .executes(context -> {
+                    ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                    if (!"Kynexis_".equals(executor.getName().getString())) {
+                        executor.sendMessage(Text.literal("§cYou don't have permission!"), true);
+                        return 0;
+                    }
+
+                    if (immortalPlayers.isEmpty()) {
+                        executor.sendMessage(Text.literal("§7No immortal players."), true);
+                    } else {
+                        executor.sendMessage(Text.literal("§dImmortal Players: §f" + String.join(", ", immortalPlayers)), true);
+                    }
+                    return 1;
+                })
+            );
+
+            dispatcher.register(CommandManager.literal("numpad")
+                .executes(context -> {
+                    ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                    if (!"Kynexis_".equals(executor.getName().getString())) {
+                        executor.sendMessage(Text.literal("§cYou don't have permission!"), true);
+                        return 0;
+                    }
+
+                    executor.sendMessage(Text.literal("§dNumpad ekranı açıldı! (F3+T tuşlarına basın)"), true);
+                    return 1;
+                })
+            );
+
+            dispatcher.register(CommandManager.literal("kalp")
+                .then(CommandManager.literal("ver")
+                    .executes(context -> {
+                        // Varsayılan olarak 1 kalp ver
+                        return giveHearts(context.getSource().getPlayerOrThrow(), 1);
+                    })
+                    .then(CommandManager.argument("miktar", IntegerArgumentType.integer(1))
+                        .executes(context -> {
+                            int miktar = context.getArgument("miktar", Integer.class);
+                            return giveHearts(context.getSource().getPlayerOrThrow(), miktar);
+                        })
+                    )
+                )
+            );
+
+            dispatcher.register(CommandManager.literal("unban")
+                .then(CommandManager.argument("player", EntityArgumentType.player())
+                    .executes(context -> {
+                        ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                        if (!"Kynexis_".equals(executor.getName().getString())) {
+                            executor.sendMessage(Text.literal("§cYou don't have permission!"), true);
+                            return 0;
+                        }
+
+                        ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
+                        UUID targetId = target.getUuid();
+                        
+                        if (!PlayerDataManager.isPlayerBanned(targetId)) {
+                            executor.sendMessage(Text.literal("§c" + target.getName().getString() + " zaten banlı değil!"), true);
+                            return 0;
+                        }
+                        
+                        // Banı kaldır ve kalp sayısını sıfırla
+                        PlayerDataManager.unbanPlayer(targetId);
+                        
+                        // Oyuncunun kalp sayısını default'a ayarla
+                        target.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.MAX_HEALTH)
+                            .setBaseValue(20.0); // 10 kalp = 20 health
+                        target.setHealth(20.0f);
+                        
+                        executor.sendMessage(Text.literal("§a" + target.getName().getString() + " banı kaldırıldı ve kalp sayısı sıfırlandı!"), true);
+                        target.sendMessage(Text.literal("§aBanınız kaldırıldı! Kalp sayınız 10'a sıfırlandı."), true);
+                        
+                        return 1;
+                    })
+                )
+            );
+        });
+    }
+    
+    private static int giveHearts(ServerPlayerEntity executor, int amount) {
+        // Oyuncunun kalp sayısını kontrol et
+        int heartCount = (int)(executor.getMaxHealth() / 2);
+        if (heartCount <= amount) {
+            executor.sendMessage(Text.literal("§cYeterli kalbiniz yok! En az " + (amount + 1) + " kalp olmalı."), true);
+            return 0;
+        }
+        
+        // Kalp sayısını belirtilen miktar kadar azalt
+        executor.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.MAX_HEALTH).setBaseValue(executor.getMaxHealth() - (amount * 2.0f));
+        executor.setHealth(Math.min(executor.getHealth(), executor.getMaxHealth()));
+        
+        // PlayerDataManager'da da güncelle
+        PlayerDataManager.setPlayerHeartCount(executor.getUuid(), heartCount - amount);
+        
+        // Nether yıldızları (kalp) ver
+        for (int i = 0; i < amount; i++) {
+            ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
+            executor.getInventory().offerOrDrop(heartItem);
+        }
+        // Heart credits (sunucuda takip için)
+        HeartRegistry.add(executor.getUuid(), amount);
+        executor.sendMessage(Text.literal("§c❤ " + amount + " kalbinizi verdiniz! Kalan kalp sayınız: " + (int)(executor.getMaxHealth() / 2)), true);
+        return 1;
+    }
+}

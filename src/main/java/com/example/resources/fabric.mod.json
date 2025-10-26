@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "modid",
+  "version": "1.0.0",
+  "name": "Mod Denemesi 2",
+  "description": "Deneme mod.",
+  "authors": ["Kynexis_"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "entrypoints": {
+  "main": ["com.example.ExampleMod"],
+  "client": ["com.example.ExampleClientMod"]
+}
+
+  },
+  "mixins": [],
+  "depends": {
+    "fabricloader": ">=0.16.7",
+    "fabric-api": "*",
+    "minecraft": "1.21.1"
+  }
+}
