@@ -13,7 +13,6 @@ import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -23,36 +22,28 @@ import java.util.UUID;
 @Mixin(PlayerEntity.class)
 public abstract class PlayerDeathMixin {
 
-    @Shadow
-    public abstract World getEntityWorld();
-
     @Inject(method = "onDeath", at = @At("HEAD"))
     private void onPlayerDeath(DamageSource damageSource, CallbackInfo ci) {
         PlayerEntity player = (PlayerEntity) (Object) this;
-        World world = getEntityWorld();
 
-        // 🌍 Sadece sunucu tarafında çalışsın
+        // ✅ Doğru: 1.21.10'da PlayerEntity -> getEntityWorld() var
+        World world = player.getEntityWorld();
+
         if (world.isClient()) return;
-
-        // 🔒 Sadece ServerPlayerEntity için
         if (!(player instanceof ServerPlayerEntity serverPlayer)) return;
 
         UUID uuid = player.getUuid();
         int currentHearts = PlayerDataManager.getPlayerHeartCount(uuid);
 
-        // 💔 Ölünce kalp azaltma
         if (currentHearts > 1) {
             PlayerDataManager.setPlayerHeartCount(uuid, currentHearts - 1);
 
-            // 🩸 Yeni max sağlık
             double newMaxHealth = (currentHearts - 1) * 2.0;
             player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
 
-            // ❤️ Kalp itemi oluştur
             ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
-            heartItem.set(DataComponentTypes.CUSTOM_NAME, Text.literal("§c ❤ Kalp"));
+            heartItem.set(DataComponentTypes.CUSTOM_NAME, Text.literal("§c❤ Kalp"));
 
-            // 💎 Kalbi düşür (ölüm konumuna)
             BlockPos deathPos = player.getBlockPos();
             ItemEntity itemEntity = new ItemEntity(
                     world,
@@ -65,7 +56,6 @@ public abstract class PlayerDeathMixin {
 
             player.sendMessage(Text.literal("§c❤ Bir kalbiniz düştü! Kalan kalp sayınız: " + (currentHearts - 1)), true);
         } else {
-            // ☠️ Hiç kalp kalmadıysa oyuncuyu banla
             PlayerDataManager.banPlayer(serverPlayer);
         }
     }
