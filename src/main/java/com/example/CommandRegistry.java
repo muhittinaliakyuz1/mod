@@ -3,6 +3,7 @@ package com.example;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.command.argument.EntityArgumentType;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -15,70 +16,79 @@ import java.util.Set;
 import java.util.UUID;
 
 public class CommandRegistry {
-
     private static final Set<String> immortalPlayers = new HashSet<>();
 
     public static void registerCommands() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 
+            // 🔮 /immortalize <player> — oyuncuya ölümsüzlük ver/al
             dispatcher.register(CommandManager.literal("immortalize")
                 .then(CommandManager.argument("player", EntityArgumentType.player())
                     .executes(context -> {
                         ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+
+                        // Yetki kontrolü
                         if (!"Kynexis_".equals(executor.getName().getString())) {
-                            executor.sendMessage(Text.literal("§cYou don't have permission!"), true);
+                            executor.sendMessage(Text.literal("§cBu komutu kullanamazsın!"), true);
                             return 0;
                         }
 
                         ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
                         String name = target.getName().getString();
 
+                        // Ölümsüzlük aç/kapat
                         if (immortalPlayers.contains(name)) {
                             immortalPlayers.remove(name);
                             target.getAbilities().invulnerable = false;
                             target.sendAbilitiesUpdate();
-                            executor.sendMessage(Text.literal("§c" + name + " is no longer immortal!"), true);
-                            target.sendMessage(Text.literal("§cYou are no longer immortal!"), true);
+                            executor.sendMessage(Text.literal("§c" + name + " artık ölümsüz değil!"), true);
+                            target.sendMessage(Text.literal("§cÖlümsüzlüğün kaldırıldı!"), true);
                         } else {
                             immortalPlayers.add(name);
                             target.getAbilities().invulnerable = true;
                             target.sendAbilitiesUpdate();
-                            executor.sendMessage(Text.literal("§d" + name + " is now §5immortal!"), true);
-                            target.sendMessage(Text.literal("§dYou are now §5immortal!"), true);
+                            executor.sendMessage(Text.literal("§d" + name + " artık §5ölümsüz!"), true);
+                            target.sendMessage(Text.literal("§dArtık §5ölümsüzsün!"), true);
                         }
                         return 1;
                     }))
             );
 
+            // 📜 /immortallist — ölümsüz oyuncuları listeler
             dispatcher.register(CommandManager.literal("immortallist")
                 .executes(context -> {
                     ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+
                     if (!"Kynexis_".equals(executor.getName().getString())) {
-                        executor.sendMessage(Text.literal("§cYou don't have permission!"), true);
+                        executor.sendMessage(Text.literal("§cBu komutu kullanamazsın!"), true);
                         return 0;
                     }
 
                     if (immortalPlayers.isEmpty()) {
-                        executor.sendMessage(Text.literal("§7No immortal players."), true);
+                        executor.sendMessage(Text.literal("§7Şu anda ölümsüz oyuncu yok."), true);
                     } else {
-                        executor.sendMessage(Text.literal("§dImmortal Players: §f" + String.join(", ", immortalPlayers)), true);
+                        executor.sendMessage(Text.literal("§dÖlümsüz Oyuncular: §f" + String.join(", ", immortalPlayers)), true);
                     }
                     return 1;
                 })
             );
 
+            // 🔢 /numpad — test komutu
             dispatcher.register(CommandManager.literal("numpad")
                 .executes(context -> {
                     ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+
                     if (!"Kynexis_".equals(executor.getName().getString())) {
-                        executor.sendMessage(Text.literal("§cYou don't have permission!"), true);
+                        executor.sendMessage(Text.literal("§cBu komutu kullanamazsın!"), true);
                         return 0;
                     }
+
                     executor.sendMessage(Text.literal("§dNumpad ekranı açıldı! (F3+T tuşlarına basın)"), true);
                     return 1;
                 })
             );
 
+            // ❤️ /kalp ver [miktar] — kalp verir (azaltır ve item düşürür)
             dispatcher.register(CommandManager.literal("kalp")
                 .then(CommandManager.literal("ver")
                     .executes(context -> giveHearts(context.getSource().getPlayerOrThrow(), 1))
@@ -93,6 +103,9 @@ public class CommandRegistry {
         });
     }
 
+    /**
+     * Oyuncunun kalbini düşürüp envanterine "❤ Kalp" itemi verir.
+     */
     private static int giveHearts(ServerPlayerEntity executor, int amount) {
         UUID uuid = executor.getUuid();
         int heartCount = PlayerDataManager.getPlayerHeartCount(uuid);
@@ -102,16 +115,18 @@ public class CommandRegistry {
             return 0;
         }
 
+        // Kalp azalt
         PlayerDataManager.setPlayerHeartCount(uuid, heartCount - amount);
 
+        // Max sağlık güncelle
         double newMaxHealth = (heartCount - amount) * 2.0;
         executor.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
         executor.setHealth((float) Math.min(executor.getHealth(), newMaxHealth));
 
+        // Kalp itemini oluştur ve ver
         for (int i = 0; i < amount; i++) {
             ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
-            // Use setCustomName
-            heartItem.setCustomName(Text.literal("§c❤️ Kalp"));
+            heartItem.set(DataComponentTypes.CUSTOM_NAME, Text.literal("§c ❤ Kalp"));
             executor.getInventory().offerOrDrop(heartItem);
         }
 
