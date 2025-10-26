@@ -11,30 +11,29 @@ base {
 }
 
 repositories {
-    // Maven reposları
+    mavenCentral()
+    maven { url 'https://maven.fabricmc.net/' }
 }
 
 loom {
     splitEnvironmentSourceSets()
 
-    // Client-side kaynak seti
     sourceSets {
         client {
             java {
-                srcDir 'src/client/java'        // Client-side Java kodları
+                srcDir 'src/client/java'
             }
-            resources.srcDir 'src/client/resources' // Client-only kaynaklar
+            resources.srcDir 'src/client/resources'
         }
 
         main {
             java {
-                srcDir 'src/main/java'          // Server + ortak kodlar
+                srcDir 'src/main/java'
             }
-            resources.srcDir 'src/main/resources'   // Ortak kaynaklar
+            resources.srcDir 'src/main/resources'
         }
     }
 
-    // Mod tanımı
     mods {
         "examplemod" {
             sourceSet sourceSets.main
@@ -42,7 +41,6 @@ loom {
         }
     }
 }
-
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"

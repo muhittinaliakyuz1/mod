@@ -17,7 +17,8 @@ public class HeartRegistry {
 
     public static boolean consume(UUID id) {
         int v = get(id);
-        if (v <= 0) return false;
+        if (v <= 0)
+            return false;
         credits.put(id, v - 1);
         return true;
     }

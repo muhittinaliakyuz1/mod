@@ -3,12 +3,12 @@ package com.example;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.command.argument.EntityArgumentType;
+import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
-
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -73,7 +73,6 @@ public class CommandRegistry {
                         executor.sendMessage(Text.literal("§cYou don't have permission!"), true);
                         return 0;
                     }
-
                     executor.sendMessage(Text.literal("§dNumpad ekranı açıldı! (F3+T tuşlarına basın)"), true);
                     return 1;
                 })
@@ -81,13 +80,10 @@ public class CommandRegistry {
 
             dispatcher.register(CommandManager.literal("kalp")
                 .then(CommandManager.literal("ver")
-                    .executes(context -> {
-                        // Varsayılan olarak 1 kalp ver
-                        return giveHearts(context.getSource().getPlayerOrThrow(), 1);
-                    })
+                    .executes(context -> giveHearts(context.getSource().getPlayerOrThrow(), 1))
                     .then(CommandManager.argument("miktar", IntegerArgumentType.integer(1))
                         .executes(context -> {
-                            int miktar = context.getArgument("miktar", Integer.class);
+                            int miktar = IntegerArgumentType.getInteger(context, "miktar");
                             return giveHearts(context.getSource().getPlayerOrThrow(), miktar);
                         })
                     )
@@ -111,12 +107,10 @@ public class CommandRegistry {
                             return 0;
                         }
                         
-                        // Banı kaldır ve kalp sayısını sıfırla
                         PlayerDataManager.unbanPlayer(targetId);
                         
-                        // Oyuncunun kalp sayısını default'a ayarla
-                        target.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.MAX_HEALTH)
-                            .setBaseValue(20.0); // 10 kalp = 20 health
+                        target.getAttributeInstance(EntityAttributes.MAX_HEALTH)
+                            .setBaseValue(20.0);
                         target.setHealth(20.0f);
                         
                         executor.sendMessage(Text.literal("§a" + target.getName().getString() + " banı kaldırıldı ve kalp sayısı sıfırlandı!"), true);
@@ -130,28 +124,26 @@ public class CommandRegistry {
     }
     
     private static int giveHearts(ServerPlayerEntity executor, int amount) {
-        // Oyuncunun kalp sayısını kontrol et
-        int heartCount = (int)(executor.getMaxHealth() / 2);
+        UUID uuid = executor.getUuid();
+        int heartCount = PlayerDataManager.getPlayerHeartCount(uuid);
         if (heartCount <= amount) {
             executor.sendMessage(Text.literal("§cYeterli kalbiniz yok! En az " + (amount + 1) + " kalp olmalı."), true);
             return 0;
         }
         
-        // Kalp sayısını belirtilen miktar kadar azalt
-        executor.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.MAX_HEALTH).setBaseValue(executor.getMaxHealth() - (amount * 2.0f));
-        executor.setHealth(Math.min(executor.getHealth(), executor.getMaxHealth()));
+        PlayerDataManager.setPlayerHeartCount(uuid, heartCount - amount);
         
-        // PlayerDataManager'da da güncelle
-        PlayerDataManager.setPlayerHeartCount(executor.getUuid(), heartCount - amount);
+        double newMaxHealth = (heartCount - amount) * 2.0;
+        executor.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
+        executor.setHealth((float) Math.min(executor.getHealth(), newMaxHealth));
         
-        // Nether yıldızları (kalp) ver
         for (int i = 0; i < amount; i++) {
             ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
+            heartItem.setCustomName(Text.literal("§c❤️ Kalp"));
             executor.getInventory().offerOrDrop(heartItem);
         }
-        // Heart credits (sunucuda takip için)
-        HeartRegistry.add(executor.getUuid(), amount);
-        executor.sendMessage(Text.literal("§c❤ " + amount + " kalbinizi verdiniz! Kalan kalp sayınız: " + (int)(executor.getMaxHealth() / 2)), true);
+        
+        executor.sendMessage(Text.literal("§c❤ " + amount + " kalbinizi verdiniz! Kalan kalp sayınız: " + (heartCount - amount)), true);
         return 1;
     }
 }
