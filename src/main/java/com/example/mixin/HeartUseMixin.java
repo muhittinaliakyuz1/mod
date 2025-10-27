@@ -26,7 +26,8 @@ public class HeartUseMixin {
         ServerPlayerEntity player = (ServerPlayerEntity) (Object) this;
 
         ItemStack stack = player.getStackInHand(hand);
-        if (stack.isOf(Items.NETHER_STAR) && stack.getName().getString().contains("❤ Kalp")) {
+        String stackName = stack.getName() != null ? stack.getName().getString() : "";
+        if (stack.isOf(Items.NETHER_STAR) && (stackName.contains("❤") || stackName.contains("♥") || stackName.equals("♥ Kalp") || stackName.equals("❤ Kalp"))) {
             UUID uuid = player.getUuid();
             int currentHearts = PlayerDataManager.getPlayerHeartCount(uuid);
 
@@ -47,7 +48,7 @@ public class HeartUseMixin {
             stack.decrement(1);
 
             // Send feedback to player
-            player.sendMessage(Text.literal("§a❤ Kalp kullanıldı! +1 kalp eklendi. Toplam: " + (currentHearts + 1)), true);
+            player.sendMessage(Text.literal("§a♥ Kalp kullanıldı! +1 kalp eklendi. Toplam: " + (currentHearts + 1)), true);
 
             // Return success to cancel default item usage
             cir.setReturnValue(TypedActionResult.success(stack));

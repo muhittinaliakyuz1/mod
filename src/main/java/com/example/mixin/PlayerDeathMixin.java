@@ -1,5 +1,6 @@
 package com.example.mixin;
 
+import com.example.ExampleMod;
 import com.example.PlayerDataManager;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.damage.DamageSource;
@@ -50,6 +51,7 @@ public abstract class PlayerDeathMixin {
 
         if (killer != null && !killer.getUuid().equals(uuid)) {
             // PvP kill: transfer one heart from victim to killer
+            ExampleMod.LOGGER.info("PlayerDeathMixin: victim={} killer={}", uuid, killer.getUuid());
             int transfer = 1;
             int victimNew = Math.max(0, currentHearts - transfer);
             PlayerDataManager.setPlayerHeartCount(uuid, victimNew);

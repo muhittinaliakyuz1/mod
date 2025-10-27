@@ -94,6 +94,31 @@ public class CodeManager {
         return activeCodes.remove(code) != null;
     }
 
+    /**
+     * Remove the code and clear its effect from the owner if they are online.
+     */
+    public static boolean removeCode(MinecraftServer server, String code) {
+        CodeEntry removed = activeCodes.remove(code);
+        if (removed == null) return false;
+
+        // Clear status effect from owner player(s)
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            if (!player.getName().getString().equals(removed.ownerName)) continue;
+            try {
+                switch (removed.effect) {
+                    case INVISIBILITY -> player.removeStatusEffect(StatusEffects.INVISIBILITY);
+                    case STRENGTH -> player.removeStatusEffect(StatusEffects.STRENGTH);
+                    case SPEED -> player.removeStatusEffect(StatusEffects.SPEED);
+                    case FIRE_RESISTANCE -> player.removeStatusEffect(StatusEffects.FIRE_RESISTANCE);
+                    case PREVENT_HUNGER -> {
+                        // no status effect to remove; we set hunger directly each tick
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        return true;
+    }
+
     /** Returns all codes visible to the given viewer (player name). */
     public static Set<String> getVisibleCodes(String viewerName) {
         return activeCodes.entrySet().stream()

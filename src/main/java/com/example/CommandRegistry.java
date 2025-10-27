@@ -101,7 +101,7 @@ public class CommandRegistry {
                             // Give the executor nether star(s) named as hearts
                             for (int i = 0; i < miktar; i++) {
                                 ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
-                                setHeartDisplayName(heartItem, Text.literal("§c ❤ Kalp"));
+                                setHeartDisplayName(heartItem, Text.literal("♥ Kalp"));
                                 executor.getInventory().offerOrDrop(heartItem);
                             }
 
@@ -122,6 +122,39 @@ public class CommandRegistry {
                     ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
                     PlayerDataManager.resetAllToDefault();
                     executor.sendMessage(Text.literal("§aTüm oyuncuların kalpleri varsayılan değere sıfırlandı."), true);
+                    return 1;
+                })
+            ));
+
+            // /revive <player> - any player can revive another by spending 1 heart; revived player gets 5 hearts and is unbanned
+            dispatcher.register(CommandManager.literal("revive").then(
+                CommandManager.argument("player", EntityArgumentType.player()).executes(context -> {
+                    ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                    ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
+
+                    java.util.UUID execId = executor.getUuid();
+                    int execHearts = PlayerDataManager.getPlayerHeartCount(execId);
+                    if (execHearts < 1) {
+                        executor.sendMessage(Text.literal("§cRevive için en az 1 kalp gerekiyor."), true);
+                        return 0;
+                    }
+
+                    // Deduct 1 heart from executor
+                    PlayerDataManager.setPlayerHeartCount(execId, execHearts - 1);
+
+                    // Unban and set target hearts to 5
+                    PlayerDataManager.unbanPlayer(target.getUuid());
+                    PlayerDataManager.setPlayerHeartCount(target.getUuid(), 5);
+
+                    // Update target attributes
+                    try {
+                        var attr = target.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+                        if (attr != null) attr.setBaseValue(5 * 2.0);
+                        target.setHealth((float) Math.min(target.getHealth(), 5 * 2.0));
+                    } catch (Exception ignored) {}
+
+                    executor.sendMessage(Text.literal("§aBaşarılı: " + target.getName().getString() + " revive edildi. Sizin kalan kalp: " + PlayerDataManager.getPlayerHeartCount(execId)), true);
+                    target.sendMessage(Text.literal("§aSiz revive edildiniz! Kalpleriniz 5 olarak ayarlandı."), true);
                     return 1;
                 })
             ));
@@ -203,8 +236,9 @@ public class CommandRegistry {
                             executor.sendMessage(Text.literal("§cGeçersiz kod."), true);
                             return 0;
                         }
-                        if (CodeManager.removeCode(k)) {
-                            executor.sendMessage(Text.literal("§aKod iptal edildi: " + k), true);
+                        var server = context.getSource().getServer();
+                        if (CodeManager.removeCode(server, k)) {
+                            executor.sendMessage(Text.literal("§aKod iptal edildi ve efekt temizlendi: " + k), true);
                             return 1;
                         } else {
                             executor.sendMessage(Text.literal("§cBöyle bir aktif kod yok: " + k), true);
@@ -261,7 +295,7 @@ public class CommandRegistry {
         // Kalp itemini oluştur ve ver
         for (int i = 0; i < amount; i++) {
             ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
-            setHeartDisplayName(heartItem, Text.literal("§c ❤ Kalp"));
+            setHeartDisplayName(heartItem, Text.literal("♥ Kalp"));
             executor.getInventory().offerOrDrop(heartItem);
         }
 
@@ -271,29 +305,90 @@ public class CommandRegistry {
 
     /** Safely set a display name on an ItemStack using reflection or NBT fallback. */
     private static void setHeartDisplayName(ItemStack stack, net.minecraft.text.Text name) {
+        // 1) Try direct API: ItemStack#setCustomName(Text)
         try {
-            // Try direct API if available
             java.lang.reflect.Method m = ItemStack.class.getMethod("setCustomName", net.minecraft.text.Text.class);
             m.invoke(stack, name);
             return;
         } catch (ReflectiveOperationException ignored) {}
 
-        try {
-            // Fallback to NBT: set display.Name to Text JSON
-            java.lang.reflect.Method getOrCreate = ItemStack.class.getMethod("getOrCreateNbt");
-            Object nbt = getOrCreate.invoke(stack);
-            if (nbt instanceof net.minecraft.nbt.NbtCompound) {
-                net.minecraft.nbt.NbtCompound display = new net.minecraft.nbt.NbtCompound();
-                // Compose minimal JSON for the item's custom name
-                String raw = name.getString().replace("\\", "\\\\").replace("\"", "\\\"");
-                String json = "{\"text\":\"" + raw + "\"}";
-                display.putString("Name", json);
-                ((net.minecraft.nbt.NbtCompound) nbt).put("display", display);
-                java.lang.reflect.Method setNbt = ItemStack.class.getMethod("setNbt", net.minecraft.nbt.NbtCompound.class);
-                setNbt.invoke(stack, nbt);
+        // 2) Try several possible method names for getOrCreate/get and setNbt/setTag to maximize mapping compatibility
+        String[] getOrCreateNames = {"getOrCreateNbt", "getOrCreateTag", "getOrCreate", "getOrCreateCompoundTag"};
+        String[] getNbtNames = {"getNbt", "getTag"};
+        String[] setNbtNames = {"setNbt", "setTag"};
+
+        Object rootNbt = null;
+        java.lang.reflect.Method setterMethod = null;
+
+        // Try getOrCreate methods first
+        for (String gname : getOrCreateNames) {
+            try {
+                java.lang.reflect.Method gm = ItemStack.class.getMethod(gname);
+                rootNbt = gm.invoke(stack);
+                break;
+            } catch (ReflectiveOperationException ignored) {}
+        }
+
+        // If not found, try getNbt and if null create a new compound
+        if (rootNbt == null) {
+            for (String gname : getNbtNames) {
+                try {
+                    java.lang.reflect.Method gm = ItemStack.class.getMethod(gname);
+                    rootNbt = gm.invoke(stack);
+                    break;
+                } catch (ReflectiveOperationException ignored) {}
             }
-        } catch (ReflectiveOperationException ignored) {
-            // Last resort: ignore naming
+        }
+
+        // Prepare setter method if available
+        for (String sname : setNbtNames) {
+            try {
+                setterMethod = ItemStack.class.getMethod(sname, net.minecraft.nbt.NbtCompound.class);
+                break;
+            } catch (ReflectiveOperationException ignored) {}
+        }
+
+        try {
+            // Ensure we have an NbtCompound root (create if necessary)
+            if (!(rootNbt instanceof net.minecraft.nbt.NbtCompound)) {
+                rootNbt = new net.minecraft.nbt.NbtCompound();
+            }
+
+            net.minecraft.nbt.NbtCompound display = new net.minecraft.nbt.NbtCompound();
+            String raw = name.getString().replace("\\", "\\\\").replace("\"", "\\\"");
+            String json = "{\"text\":\"" + raw + "\",\"color\":\"red\"}";
+            display.putString("Name", json);
+
+            // put display into root
+            try {
+                java.lang.reflect.Method putMethod = net.minecraft.nbt.NbtCompound.class.getMethod("put", String.class, net.minecraft.nbt.NbtElement.class);
+                putMethod.invoke(rootNbt, "display", display);
+            } catch (ReflectiveOperationException e) {
+                // Fallback: try putCompound (some mappings)
+                try {
+                    java.lang.reflect.Method putComp = net.minecraft.nbt.NbtCompound.class.getMethod("putCompound", String.class);
+                    Object comp = putComp.invoke(rootNbt, "display");
+                    // copy string
+                    java.lang.reflect.Method putStr = comp.getClass().getMethod("putString", String.class, String.class);
+                    putStr.invoke(comp, "Name", json);
+                } catch (ReflectiveOperationException ignored) {}
+            }
+
+            // If we found a setter on ItemStack, call it; otherwise try to set via common setNbt
+            if (setterMethod != null) {
+                setterMethod.invoke(stack, rootNbt);
+            } else {
+                // try common method names reflectively
+                for (String sname : setNbtNames) {
+                    try {
+                        java.lang.reflect.Method sm = ItemStack.class.getMethod(sname, net.minecraft.nbt.NbtCompound.class);
+                        sm.invoke(stack, rootNbt);
+                        break;
+                    } catch (ReflectiveOperationException ignored) {}
+                }
+            }
+        } catch (Exception ignored) {
+            // give up silently
         }
     }
 

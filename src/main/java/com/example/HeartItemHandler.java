@@ -15,35 +15,38 @@ public class HeartItemHandler {
 
             ItemStack stack = player.getStackInHand(hand);
             if (stack.getItem() == Items.NETHER_STAR) {
-                // Özel isim kontrolü (isimde "❤" varsa)
-                if (stack.getName() != null && stack.getName().getString().contains("❤")) {
-                    if (!(player instanceof ServerPlayerEntity serverPlayer)) return ActionResult.PASS;
+                // Özel isim kontrolü (isimde "❤" veya "♥" varsa)
+                try {
+                    String name = stack.getName() != null ? stack.getName().getString() : "";
+                    if (name.contains("❤") || name.contains("♥") || name.equals("♥ Kalp") || name.equals("❤ Kalp")) {
+                        if (!(player instanceof ServerPlayerEntity serverPlayer)) return ActionResult.PASS;
 
-                    // Bir kalp ekle
-                    java.util.UUID uuid = serverPlayer.getUuid();
-                    int current = PlayerDataManager.getPlayerHeartCount(uuid);
-                    PlayerDataManager.setPlayerHeartCount(uuid, current + 1);
+                        // Bir kalp ekle
+                        java.util.UUID uuid = serverPlayer.getUuid();
+                        int current = PlayerDataManager.getPlayerHeartCount(uuid);
+                        PlayerDataManager.setPlayerHeartCount(uuid, current + 1);
 
-                    // Max sağlığı güncelle (her kalp = 2 can)
-                    try {
-                        var attr = serverPlayer.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.MAX_HEALTH);
-                        if (attr != null) {
-                            double newMax = (current + 1) * 2.0;
-                            attr.setBaseValue(newMax);
-                            float newHealth = (float) Math.min(serverPlayer.getHealth() + 2.0f, newMax);
-                            serverPlayer.setHealth(newHealth);
+                        // Max sağlığı güncelle (her kalp = 2 can)
+                        try {
+                            var attr = serverPlayer.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.MAX_HEALTH);
+                            if (attr != null) {
+                                double newMax = (current + 1) * 2.0;
+                                attr.setBaseValue(newMax);
+                                float newHealth = (float) Math.min(serverPlayer.getHealth() + 2.0f, newMax);
+                                serverPlayer.setHealth(newHealth);
+                            }
+                        } catch (Exception e) {
+                            // Eğer attribute API farklıysa sadece canı arttır
+                            serverPlayer.setHealth((float) Math.min(serverPlayer.getHealth() + 2.0f, serverPlayer.getMaxHealth() + 2.0f));
                         }
-                    } catch (Exception e) {
-                        // Eğer attribute API farklıysa sadece canı arttır
-                        serverPlayer.setHealth((float) Math.min(serverPlayer.getHealth() + 2.0f, serverPlayer.getMaxHealth() + 2.0f));
+
+                        // Tüket
+                        if (!serverPlayer.getAbilities().creativeMode) stack.decrement(1);
+
+                        serverPlayer.sendMessage(Text.literal("§a♥ Kalp kullanıldı! Toplam kalp: " + PlayerDataManager.getPlayerHeartCount(uuid)), true);
+                        return ActionResult.SUCCESS;
                     }
-
-                    // Tüket
-                    if (!serverPlayer.getAbilities().creativeMode) stack.decrement(1);
-
-                    serverPlayer.sendMessage(Text.literal("§a❤ Kalp kullanıldı! Toplam kalp: " + PlayerDataManager.getPlayerHeartCount(uuid)), true);
-                    return ActionResult.SUCCESS;
-                }
+                } catch (Exception ignored) {}
             }
             return ActionResult.PASS;
         });
