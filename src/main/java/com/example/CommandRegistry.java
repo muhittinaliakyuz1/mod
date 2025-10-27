@@ -14,6 +14,7 @@ import net.minecraft.text.Text;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
 
 public class CommandRegistry {
     private static final Set<String> immortalPlayers = new HashSet<>();
@@ -80,6 +81,103 @@ public class CommandRegistry {
                         int miktar = IntegerArgumentType.getInteger(context, "miktar");
                         return giveHearts(context.getSource().getPlayerOrThrow(), miktar);
                     })
+                )
+            ));
+
+            // /kalp al <oyuncu> <miktar>  - admin-only (Kynexis_)
+            dispatcher.register(CommandManager.literal("kalp").then(
+                CommandManager.literal("al").then(
+                    CommandManager.argument("player", EntityArgumentType.player()).then(
+                        CommandManager.argument("miktar", IntegerArgumentType.integer(1)).executes(context -> {
+                            ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                            if (!"Kynexis_".equals(executor.getName().getString())) {
+                                executor.sendMessage(Text.literal("§cBu komutu sadece Kynexis_ kullanabilir."), true);
+                                return 0;
+                            }
+                            ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
+                            int miktar = IntegerArgumentType.getInteger(context, "miktar");
+                            java.util.UUID tid = target.getUuid();
+                            int current = PlayerDataManager.getPlayerHeartCount(tid);
+                            int newVal = Math.max(0, current - miktar);
+                            PlayerDataManager.setPlayerHeartCount(tid, newVal);
+                            // Update attribute if possible
+                            try {
+                                var attr = target.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.MAX_HEALTH);
+                                if (attr != null) attr.setBaseValue(newVal * 2.0);
+                            } catch (Exception ignored) {}
+                            executor.sendMessage(Text.literal("§aBaşarılı. " + target.getName().getString() + " artık " + newVal + " kalbe sahip."), true);
+                            target.sendMessage(Text.literal("§cBir admin tarafından kalbiniz alındı. Kalan: " + newVal), true);
+                            if (newVal <= 0) PlayerDataManager.banPlayer(target);
+                            return 1;
+                        })
+                    )
+                )
+            ));
+
+            // /code <4-digit> (only Kynexis_) and /code iptal <code> and /code info <code>
+            SuggestionProvider<net.minecraft.server.command.ServerCommandSource> codeSuggestions = (context, builder) -> {
+                for (String c : CodeManager.getActiveCodes()) {
+                    if (c.startsWith(builder.getRemaining())) builder.suggest(c);
+                }
+                // also suggest some example codes
+                if ("1234".startsWith(builder.getRemaining())) builder.suggest("1234");
+                if ("0000".startsWith(builder.getRemaining())) builder.suggest("0000");
+                return builder.buildFuture();
+            };
+
+            dispatcher.register(CommandManager.literal("code").then(
+                CommandManager.argument("arg", com.mojang.brigadier.arguments.StringArgumentType.word()).suggests(codeSuggestions).executes(context -> {
+                    ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                    if (!"Kynexis_".equals(executor.getName().getString())) {
+                        executor.sendMessage(Text.literal("§cBu komutu sadece Kynexis_ kullanabilir."), true);
+                        return 0;
+                    }
+                    String code = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "arg");
+                    // If it's 4 digits, add with default effect INVISIBILITY
+                    if (code.length() == 4 && code.matches("\\d{4}")) {
+                        CodeManager.addCode(code, CodeManager.EffectType.INVISIBILITY);
+                        executor.sendMessage(Text.literal("§aKod etkinleştirildi: " + code + " (Invisibility)"), true);
+                        return 1;
+                    }
+                    executor.sendMessage(Text.literal("§cGeçersiz kod. 4 rakamlı bir kod girin veya /code iptal <kod> veya /code info <kod> kullanın."), true);
+                    return 0;
+                }).then(
+                    CommandManager.literal("iptal").then(
+                        CommandManager.argument("k", com.mojang.brigadier.arguments.StringArgumentType.word()).suggests(codeSuggestions).executes(context -> {
+                            ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                            if (!"Kynexis_".equals(executor.getName().getString())) {
+                                executor.sendMessage(Text.literal("§cBu komutu sadece Kynexis_ kullanabilir."), true);
+                                return 0;
+                            }
+                            String k = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "k");
+                            if (CodeManager.removeCode(k)) {
+                                executor.sendMessage(Text.literal("§aKod iptal edildi: " + k), true);
+                                return 1;
+                            } else {
+                                executor.sendMessage(Text.literal("§cBöyle bir aktif kod yok: " + k), true);
+                                return 0;
+                            }
+                        })
+                    )
+                ).then(
+                    CommandManager.literal("info").then(
+                        CommandManager.argument("k2", com.mojang.brigadier.arguments.StringArgumentType.word()).suggests(codeSuggestions).executes(context -> {
+                            ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                            if (!"Kynexis_".equals(executor.getName().getString())) {
+                                executor.sendMessage(Text.literal("§cBu komutu sadece Kynexis_ kullanabilir."), true);
+                                return 0;
+                            }
+                            String k2 = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "k2");
+                            var effect = CodeManager.getEffect(k2);
+                            if (effect != null) {
+                                executor.sendMessage(Text.literal("§eKod: " + k2 + " -> " + effect.name()), true);
+                                return 1;
+                            } else {
+                                executor.sendMessage(Text.literal("§cBöyle bir aktif kod yok: " + k2), true);
+                                return 0;
+                            }
+                        })
+                    )
                 )
             ));
         });

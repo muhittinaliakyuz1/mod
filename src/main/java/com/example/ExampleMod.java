@@ -24,7 +24,10 @@ public class ExampleMod implements ModInitializer {
         HeartRegistry.init();
 
         // Sunucu başlatıldığında player data dosyasını yükle/sakla
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> PlayerDataManager.initialize(server));
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            PlayerDataManager.initialize(server);
+            CodeManager.register(server);
+        });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> PlayerDataManager.saveData());
 
         LOGGER.info("ExampleMod (modid) başlatıldı.");
