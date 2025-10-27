@@ -63,16 +63,7 @@ public class CommandRegistry {
                 return 1;
             }));
 
-            // numpad
-            dispatcher.register(CommandManager.literal("numpad").executes(context -> {
-                ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
-                if (!"Kynexis_".equals(executor.getName().getString())) {
-                    executor.sendMessage(Text.literal("§cBu komutu kullanamazsın!"), true);
-                    return 0;
-                }
-                executor.sendMessage(Text.literal("§dNumpad ekranı açıldı! (F3+T tuşlarına basın)"), true);
-                return 1;
-            }));
+            // (numpad kaldırıldı) - Numpad ekranı artık kullanılmıyor; /code kullanın
 
             // kalp ver [miktar]
             dispatcher.register(CommandManager.literal("kalp").then(
@@ -114,12 +105,39 @@ public class CommandRegistry {
                 )
             ));
 
-            // /code <4-digit> (only Kynexis_) and /code iptal <code> and /code info <code>
+            // /code (list) and /code <4-digit> (only Kynexis_) and /code iptal <code> and /code info <code>
+
+            // /code ile aktif kodları ve açıklamalarını listele
+            dispatcher.register(CommandManager.literal("code").executes(context -> {
+                ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                if (!"Kynexis_".equals(executor.getName().getString())) {
+                    executor.sendMessage(Text.literal("§cBu komutu sadece Kynexis_ kullanabilir."), true);
+                    return 0;
+                }
+                var codes = CodeManager.getVisibleCodes(executor.getName().getString());
+                if (codes.isEmpty()) {
+                    executor.sendMessage(Text.literal("§7Aktif kod yok."), true);
+                    return 1;
+                }
+                executor.sendMessage(Text.literal("§eAktif Kodlar:"), true);
+                for (String c : codes) {
+                    var effect = CodeManager.getEffect(c);
+                    String label = effect != null ? mapEffectLabel(effect) : "Bilinmiyor";
+                    executor.sendMessage(Text.literal("§6" + c + " §7(" + label + ")"), true);
+                }
+                return 1;
+            }));
             SuggestionProvider<net.minecraft.server.command.ServerCommandSource> codeSuggestions = (context, builder) -> {
-                for (String c : CodeManager.getActiveCodes()) {
+                String viewer = null;
+                try {
+                    viewer = context.getSource().getPlayerOrThrow().getName().getString();
+                } catch (Exception ignored) {}
+                // Only suggest codes to Kynexis_ (per request)
+                if (!"Kynexis_".equals(viewer)) return builder.buildFuture();
+                for (String c : CodeManager.getVisibleCodes(viewer)) {
                     if (c.startsWith(builder.getRemaining())) builder.suggest(c);
                 }
-                // also suggest some example codes
+                // also suggest some example codes for Kynexis_
                 if ("1234".startsWith(builder.getRemaining())) builder.suggest("1234");
                 if ("0000".startsWith(builder.getRemaining())) builder.suggest("0000");
                 return builder.buildFuture();
@@ -135,8 +153,9 @@ public class CommandRegistry {
                     String code = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "arg");
                     // If it's 4 digits, add with default effect INVISIBILITY
                     if (code.length() == 4 && code.matches("\\d{4}")) {
-                        CodeManager.addCode(code, CodeManager.EffectType.INVISIBILITY);
-                        executor.sendMessage(Text.literal("§aKod etkinleştirildi: " + code + " (Invisibility)"), true);
+                        // Add code owned by the executor and mark private so only owner can see it
+                        CodeManager.addCode(code, CodeManager.EffectType.INVISIBILITY, executor.getName().getString(), true);
+                        executor.sendMessage(Text.literal("§aKod etkinleştirildi: " + code + " (Invisibility, gizli)") , true);
                         return 1;
                     }
                     executor.sendMessage(Text.literal("§cGeçersiz kod. 4 rakamlı bir kod girin veya /code iptal <kod> veya /code info <kod> kullanın."), true);
@@ -212,5 +231,13 @@ public class CommandRegistry {
 
         executor.sendMessage(Text.literal("§c❤ " + amount + " kalbinizi verdiniz! Kalan kalp sayınız: " + (heartCount - amount)), true);
         return 1;
+    }
+
+    private static String mapEffectLabel(CodeManager.EffectType effect) {
+        return switch (effect) {
+            case INVISIBILITY -> "Görünmezlik";
+            case STRENGTH -> "Güç";
+            case PREVENT_HUNGER -> "Açlığı Engelle";
+        };
     }
 }

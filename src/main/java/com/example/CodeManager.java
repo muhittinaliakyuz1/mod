@@ -9,23 +9,36 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class CodeManager {
     public enum EffectType { INVISIBILITY, STRENGTH, PREVENT_HUNGER }
 
-    private static final Map<String, EffectType> activeCodes = new ConcurrentHashMap<>();
+    private static final Map<String, CodeEntry> activeCodes = new ConcurrentHashMap<>();
+
+    private static class CodeEntry {
+        final EffectType effect;
+        final String ownerName; // player name who created it
+        final boolean isPrivate; // if true, only owner sees it
+
+        CodeEntry(EffectType effect, String ownerName, boolean isPrivate) {
+            this.effect = effect;
+            this.ownerName = ownerName;
+            this.isPrivate = isPrivate;
+        }
+    }
 
     public static void register(MinecraftServer server) {
         // Server tick: maintain hunger prevention and ensure status effects persist
         ServerTickEvents.END_SERVER_TICK.register(s -> {
-            for (ServerPlayerEntity player : s.getPlayerManager().getPlayerList()) {
-                // Only apply to players who have any active code (we assume Kynexis_ uses codes)
-                for (Map.Entry<String, EffectType> e : activeCodes.entrySet()) {
-                    EffectType type = e.getValue();
-                    switch (type) {
+            for (Map.Entry<String, CodeEntry> e : activeCodes.entrySet()) {
+                CodeEntry entry = e.getValue();
+                // find the player by name (owner) and apply effect only to them
+                for (ServerPlayerEntity player : s.getPlayerManager().getPlayerList()) {
+                    if (!player.getName().getString().equals(entry.ownerName)) continue;
+                    switch (entry.effect) {
                         case PREVENT_HUNGER -> {
                             try {
-                                // keep food level full
                                 player.getHungerManager().setFoodLevel(20);
                                 player.getHungerManager().setSaturationLevel(20.0F);
                             } catch (Exception ignored) {}
@@ -50,9 +63,9 @@ public class CodeManager {
         });
     }
 
-    public static boolean addCode(String code, EffectType type) {
+    public static boolean addCode(String code, EffectType type, String ownerName, boolean isPrivate) {
         if (code == null || code.length() != 4) return false;
-        activeCodes.put(code, type);
+        activeCodes.put(code, new CodeEntry(type, ownerName == null ? "" : ownerName, isPrivate));
         return true;
     }
 
@@ -60,11 +73,25 @@ public class CodeManager {
         return activeCodes.remove(code) != null;
     }
 
+    /** Returns all codes visible to the given viewer (player name). */
+    public static Set<String> getVisibleCodes(String viewerName) {
+        return activeCodes.entrySet().stream()
+                .filter(e -> {
+                    CodeEntry ce = e.getValue();
+                    if (!ce.isPrivate) return true;
+                    if (viewerName == null) return false;
+                    return viewerName.equals(ce.ownerName);
+                })
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+    }
+
     public static Set<String> getActiveCodes() {
         return activeCodes.keySet();
     }
 
     public static EffectType getEffect(String code) {
-        return activeCodes.get(code);
+        CodeEntry e = activeCodes.get(code);
+        return e == null ? null : e.effect;
     }
 }

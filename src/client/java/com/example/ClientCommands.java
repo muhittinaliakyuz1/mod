@@ -9,7 +9,5 @@ public class ClientCommands {
         System.out.println("ClientCommands kaydedildi!");
     }
     
-    public static void openNumpad() {
-        MinecraftClient.getInstance().setScreen(new NumpadScreen());
-    }
+    // Numpad kaldırıldı; açık fonksiyon yok.
 }
