@@ -2,22 +2,22 @@
   "schemaVersion": 1,
   "id": "modid",
   "version": "1.0.0",
-  "name": "Mod Denemesi 2",
-  "description": "Deneme mod.",
+  "name": "Kalp Sistemi Modu",
+  "description": "Oyunculara ekstra kalp verme ve yönetme sistemi ekler.",
   "authors": ["Kynexis_"],
   "license": "MIT",
   "environment": "*",
   "entrypoints": {
-    "entrypoints": {
-  "main": ["com.example.ExampleMod"],
-  "client": ["com.example.ExampleClientMod"]
-}
-
+    "main": ["com.example.ExampleMod"],
+    "client": ["com.example.ExampleClientMod"]
   },
-  "mixins": [],
+  "mixins": [
+    "modid.mixins.json",
+    "modid.client.mixins.json"
+  ],
   "depends": {
-    "fabricloader": ">=0.16.7",
+    "fabricloader": ">=0.17.2",
     "fabric-api": "*",
-    "minecraft": "1.21.1"
+    "minecraft": "~1.21.1"
   }
 }

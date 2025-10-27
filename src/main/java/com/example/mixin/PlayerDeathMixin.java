@@ -1,16 +1,12 @@
 package com.example.mixin;
 
 import com.example.PlayerDataManager;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.projectile.PersistentProjectileEntity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -35,28 +31,45 @@ public abstract class PlayerDeathMixin {
         UUID uuid = player.getUuid();
         int currentHearts = PlayerDataManager.getPlayerHeartCount(uuid);
 
-        if (currentHearts > 1) {
-            PlayerDataManager.setPlayerHeartCount(uuid, currentHearts - 1);
+        // Determine attacker: only transfer on PvP kills. Ignore fall/mob deaths.
+        net.minecraft.entity.Entity attacker = damageSource.getAttacker();
+        ServerPlayerEntity killer = null;
+        if (attacker instanceof ServerPlayerEntity sp) {
+            killer = sp;
+        } else if (damageSource.getSource() instanceof PersistentProjectileEntity proj && proj.getOwner() instanceof ServerPlayerEntity owner) {
+            killer = owner;
+        }
 
-            double newMaxHealth = (currentHearts - 1) * 2.0;
-            player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(newMaxHealth);
+        if (killer != null && !killer.getUuid().equals(uuid)) {
+            // PvP kill: transfer one heart from victim to killer
+            int transfer = 1;
+            int victimNew = Math.max(0, currentHearts - transfer);
+            PlayerDataManager.setPlayerHeartCount(uuid, victimNew);
 
-            ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
-            heartItem.set(DataComponentTypes.CUSTOM_NAME, Text.literal("§c❤ Kalp"));
+            // Give killer a heart
+            java.util.UUID kId = killer.getUuid();
+            int kHearts = PlayerDataManager.getPlayerHeartCount(kId);
+            PlayerDataManager.setPlayerHeartCount(kId, kHearts + transfer);
 
-            BlockPos deathPos = player.getBlockPos();
-            ItemEntity itemEntity = new ItemEntity(
-                    world,
-                    deathPos.getX() + 0.5,
-                    deathPos.getY(),
-                    deathPos.getZ() + 0.5,
-                    heartItem
-            );
-            world.spawnEntity(itemEntity);
+            // Update attributes
+            try {
+                var victimAttr = serverPlayer.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+                if (victimAttr != null) victimAttr.setBaseValue(victimNew * 2.0);
+            } catch (Exception ignored) {}
 
-            player.sendMessage(Text.literal("§c❤ Bir kalbiniz düştü! Kalan kalp sayınız: " + (currentHearts - 1)), true);
-        } else {
-            PlayerDataManager.banPlayer(serverPlayer);
+            try {
+                var killerAttr = killer.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+                if (killerAttr != null) killerAttr.setBaseValue((kHearts + transfer) * 2.0);
+            } catch (Exception ignored) {}
+
+            // Notify players
+            serverPlayer.sendMessage(Text.literal("§cBir kalbiniz yok oldu ve öldürüldünüz! Kalan kalp: " + victimNew), true);
+            killer.sendMessage(Text.literal("§aBaşarılı öldürme! Bir kalp kazandınız. Toplam: " + PlayerDataManager.getPlayerHeartCount(kId)), true);
+
+            // If victim reached 0 hearts, ban
+            if (victimNew <= 0) {
+                PlayerDataManager.banPlayer(serverPlayer);
+            }
         }
     }
 }

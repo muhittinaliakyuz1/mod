@@ -1,6 +1,5 @@
 package com.example.mixin.client;
 
-import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -26,10 +25,10 @@ public class ExampleClientMixin {
             // Eğer oyuncunun kullanılmamış bir hakkı varsa, kullan ve itemi azalt.
             if (!world.isClient()) {
                 if (HeartRegistry.consume(player.getUuid())) {
-                    double currentMax = player.getAttributeInstance(EntityAttributes.MAX_HEALTH).getBaseValue();
-                    player.getAttributeInstance(EntityAttributes.MAX_HEALTH).setBaseValue(currentMax + 2.0);
-                    float newHealth = Math.min(player.getHealth() + 2.0f, (float)(currentMax + 2.0));
-                    player.setHealth(newHealth);
+                    double currentMax = player.getMaxHealth();
+                    double newMaxHealth = currentMax + 2.0;
+                    player.getAbilities().setWalkSpeed(0.1f); // Can güncellemesi için gerekli
+                    player.setHealth(Math.min(player.getHealth() + 2.0f, (float)newMaxHealth));
                     player.sendMessage(Text.literal("§a+1 kalp eklendi! Yeni maksimum can: " + (int)((currentMax + 2.0)/2) + " kalp"), true);
                     if (!player.getAbilities().creativeMode) {
                         stack.decrement(1);

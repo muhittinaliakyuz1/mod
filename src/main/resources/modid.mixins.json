@@ -6,11 +6,7 @@
     "ExampleMixin",
     "PlayerDeathMixin"
   ],
-  "client": [
-    "ClientOnlyMixin"
-  ],
   "server": [
-    "HeartUseMixin",
     "PlayerConnectMixin"
   ],
   "injectors": {

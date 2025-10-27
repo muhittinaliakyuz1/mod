@@ -20,86 +20,68 @@ public class CommandRegistry {
 
     public static void registerCommands() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            // immortalize <player>
+            var immortalizeRoot = CommandManager.literal("immortalize");
+            var immortalizeArg = CommandManager.argument("player", EntityArgumentType.player()).executes(context -> {
+                ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                if (!"Kynexis_".equals(executor.getName().getString())) {
+                    executor.sendMessage(Text.literal("§cBu komutu kullanamazsın!"), true);
+                    return 0;
+                }
+                ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
+                String name = target.getName().getString();
+                if (immortalPlayers.contains(name)) {
+                    immortalPlayers.remove(name);
+                    target.getAbilities().invulnerable = false;
+                    target.sendAbilitiesUpdate();
+                    executor.sendMessage(Text.literal("§c" + name + " artık ölümsüz değil!"), true);
+                    target.sendMessage(Text.literal("§cÖlümsüzlüğün kaldırıldı!"), true);
+                } else {
+                    immortalPlayers.add(name);
+                    target.getAbilities().invulnerable = true;
+                    target.sendAbilitiesUpdate();
+                    executor.sendMessage(Text.literal("§d" + name + " artık §5ölümsüz!"), true);
+                    target.sendMessage(Text.literal("§dArtık §5ölümsün!"), true);
+                }
+                return 1;
+            });
+            dispatcher.register(immortalizeRoot.then(immortalizeArg));
 
-            // 🔮 /immortalize <player> — oyuncuya ölümsüzlük ver/al
-            dispatcher.register(CommandManager.literal("immortalize")
-                .then(CommandManager.argument("player", EntityArgumentType.player())
-                    .executes(context -> {
-                        ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+            // immortallist
+            dispatcher.register(CommandManager.literal("immortallist").executes(context -> {
+                ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                if (!"Kynexis_".equals(executor.getName().getString())) {
+                    executor.sendMessage(Text.literal("§cBu komutu kullanamazsın!"), true);
+                    return 0;
+                }
+                if (immortalPlayers.isEmpty()) {
+                    executor.sendMessage(Text.literal("§7Şu anda ölümsüz oyuncu yok."), true);
+                } else {
+                    executor.sendMessage(Text.literal("§dÖlümsüz Oyuncular: §f" + String.join(", ", immortalPlayers)), true);
+                }
+                return 1;
+            }));
 
-                        // Yetki kontrolü
-                        if (!"Kynexis_".equals(executor.getName().getString())) {
-                            executor.sendMessage(Text.literal("§cBu komutu kullanamazsın!"), true);
-                            return 0;
-                        }
+            // numpad
+            dispatcher.register(CommandManager.literal("numpad").executes(context -> {
+                ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                if (!"Kynexis_".equals(executor.getName().getString())) {
+                    executor.sendMessage(Text.literal("§cBu komutu kullanamazsın!"), true);
+                    return 0;
+                }
+                executor.sendMessage(Text.literal("§dNumpad ekranı açıldı! (F3+T tuşlarına basın)"), true);
+                return 1;
+            }));
 
-                        ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
-                        String name = target.getName().getString();
-
-                        // Ölümsüzlük aç/kapat
-                        if (immortalPlayers.contains(name)) {
-                            immortalPlayers.remove(name);
-                            target.getAbilities().invulnerable = false;
-                            target.sendAbilitiesUpdate();
-                            executor.sendMessage(Text.literal("§c" + name + " artık ölümsüz değil!"), true);
-                            target.sendMessage(Text.literal("§cÖlümsüzlüğün kaldırıldı!"), true);
-                        } else {
-                            immortalPlayers.add(name);
-                            target.getAbilities().invulnerable = true;
-                            target.sendAbilitiesUpdate();
-                            executor.sendMessage(Text.literal("§d" + name + " artık §5ölümsüz!"), true);
-                            target.sendMessage(Text.literal("§dArtık §5ölümsüzsün!"), true);
-                        }
-                        return 1;
-                    }))
-            );
-
-            // 📜 /immortallist — ölümsüz oyuncuları listeler
-            dispatcher.register(CommandManager.literal("immortallist")
-                .executes(context -> {
-                    ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
-
-                    if (!"Kynexis_".equals(executor.getName().getString())) {
-                        executor.sendMessage(Text.literal("§cBu komutu kullanamazsın!"), true);
-                        return 0;
-                    }
-
-                    if (immortalPlayers.isEmpty()) {
-                        executor.sendMessage(Text.literal("§7Şu anda ölümsüz oyuncu yok."), true);
-                    } else {
-                        executor.sendMessage(Text.literal("§dÖlümsüz Oyuncular: §f" + String.join(", ", immortalPlayers)), true);
-                    }
-                    return 1;
-                })
-            );
-
-            // 🔢 /numpad — test komutu
-            dispatcher.register(CommandManager.literal("numpad")
-                .executes(context -> {
-                    ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
-
-                    if (!"Kynexis_".equals(executor.getName().getString())) {
-                        executor.sendMessage(Text.literal("§cBu komutu kullanamazsın!"), true);
-                        return 0;
-                    }
-
-                    executor.sendMessage(Text.literal("§dNumpad ekranı açıldı! (F3+T tuşlarına basın)"), true);
-                    return 1;
-                })
-            );
-
-            // ❤️ /kalp ver [miktar] — kalp verir (azaltır ve item düşürür)
-            dispatcher.register(CommandManager.literal("kalp")
-                .then(CommandManager.literal("ver")
-                    .executes(context -> giveHearts(context.getSource().getPlayerOrThrow(), 1))
-                    .then(CommandManager.argument("miktar", IntegerArgumentType.integer(1))
-                        .executes(context -> {
-                            int miktar = IntegerArgumentType.getInteger(context, "miktar");
-                            return giveHearts(context.getSource().getPlayerOrThrow(), miktar);
-                        })
-                    )
+            // kalp ver [miktar]
+            dispatcher.register(CommandManager.literal("kalp").then(
+                CommandManager.literal("ver").executes(context -> giveHearts(context.getSource().getPlayerOrThrow(), 1)).then(
+                    CommandManager.argument("miktar", IntegerArgumentType.integer(1)).executes(context -> {
+                        int miktar = IntegerArgumentType.getInteger(context, "miktar");
+                        return giveHearts(context.getSource().getPlayerOrThrow(), miktar);
+                    })
                 )
-            );
+            ));
         });
     }
 
