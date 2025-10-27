@@ -78,6 +78,7 @@ tasks.named('sourcesJar') {
 }
 
 jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from('LICENSE') {
         rename { "${it}_${project.base.archivesName}" }
     }

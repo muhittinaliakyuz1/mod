@@ -22,7 +22,7 @@ public class HeartUseMixin {
      * Injects into ServerPlayerEntity's interactItem method to handle custom heart item usage.
      */
     @Inject(method = "interactItem", at = @At("HEAD"), cancellable = true)
-    private void onUseHeart(Hand hand, CallbackInfoReturnable<TypedActionResult<ItemStack>> cir) {
+    private void onUseHeart(Hand hand, CallbackInfoReturnable<com.example.mixin.TypedActionResult<ItemStack>> cir) {
         ServerPlayerEntity player = (ServerPlayerEntity) (Object) this;
 
         ItemStack stack = player.getStackInHand(hand);
@@ -51,7 +51,7 @@ public class HeartUseMixin {
             player.sendMessage(Text.literal("§a♥ Kalp kullanıldı! +1 kalp eklendi. Toplam: " + (currentHearts + 1)), true);
 
             // Return success to cancel default item usage
-            cir.setReturnValue(TypedActionResult.success(stack));
+            cir.setReturnValue(com.example.mixin.TypedActionResult.success(stack));
         }
     }
 }

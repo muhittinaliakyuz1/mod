@@ -68,43 +68,39 @@ public class CommandRegistry {
 
             // (numpad kaldırıldı) - Numpad ekranı artık kullanılmıyor; /code kullanın
 
-            // kalp ver [miktar]
+            // kalp ver <oyuncu> [miktar]  - vereni azaltır, alana ekler
             dispatcher.register(CommandManager.literal("kalp").then(
-                CommandManager.literal("ver").executes(context -> giveHearts(context.getSource().getPlayerOrThrow(), 1)).then(
-                    CommandManager.argument("miktar", IntegerArgumentType.integer(1)).executes(context -> {
-                        int miktar = IntegerArgumentType.getInteger(context, "miktar");
-                        return giveHearts(context.getSource().getPlayerOrThrow(), miktar);
-                    })
+                CommandManager.literal("ver").then(
+                    CommandManager.argument("player", EntityArgumentType.player()).executes(ctx -> {
+                        ServerPlayerEntity executor = ctx.getSource().getPlayerOrThrow();
+                        ServerPlayerEntity target = EntityArgumentType.getPlayer(ctx, "player");
+                        return transferHearts(executor, target, 1);
+                    }).then(
+                        CommandManager.argument("miktar", IntegerArgumentType.integer(1)).executes(ctx -> {
+                            ServerPlayerEntity executor = ctx.getSource().getPlayerOrThrow();
+                            ServerPlayerEntity target = EntityArgumentType.getPlayer(ctx, "player");
+                            int miktar = IntegerArgumentType.getInteger(ctx, "miktar");
+                            return transferHearts(executor, target, miktar);
+                        })
+                    )
                 )
             ));
 
-            // /kalp al <oyuncu> <miktar>  - admin-only (Kynexis_)
+            // /kalp al <oyuncu> <miktar> - admin only: doğrudan hedeften azalt
             dispatcher.register(CommandManager.literal("kalp").then(
                 CommandManager.literal("al").requires(src -> {
                     try { return src.getPlayerOrThrow().getName().getString().equals("Kynexis_"); } catch (Exception ignored) { return false; }
                 }).then(
                     CommandManager.argument("player", EntityArgumentType.player()).then(
-                        CommandManager.argument("miktar", IntegerArgumentType.integer(1)).executes(context -> {
-                            ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
-                            ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
-                            int miktar = IntegerArgumentType.getInteger(context, "miktar");
+                        CommandManager.argument("miktar", IntegerArgumentType.integer(1)).executes(ctx -> {
+                            ServerPlayerEntity executor = ctx.getSource().getPlayerOrThrow();
+                            ServerPlayerEntity target = EntityArgumentType.getPlayer(ctx, "player");
+                            int miktar = IntegerArgumentType.getInteger(ctx, "miktar");
                             java.util.UUID tid = target.getUuid();
                             int current = PlayerDataManager.getPlayerHeartCount(tid);
                             int newVal = Math.max(0, current - miktar);
                             PlayerDataManager.setPlayerHeartCount(tid, newVal);
-                            // Update attribute if possible for target
-                            try {
-                                var attr = target.getAttributeInstance(EntityAttributes.MAX_HEALTH);
-                                if (attr != null) attr.setBaseValue(newVal * 2.0);
-                            } catch (Exception ignored) {}
-
-                            // Give the executor nether star(s) named as hearts
-                            for (int i = 0; i < miktar; i++) {
-                                ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
-                                setHeartDisplayName(heartItem, Text.literal("♥ Kalp"));
-                                executor.getInventory().offerOrDrop(heartItem);
-                            }
-
+                            try { var attr = target.getAttributeInstance(EntityAttributes.MAX_HEALTH); if (attr != null) attr.setBaseValue(newVal * 2.0); } catch (Exception ignored) {}
                             executor.sendMessage(Text.literal("§aBaşarılı. " + target.getName().getString() + " artık " + newVal + " kalbe sahip."), true);
                             target.sendMessage(Text.literal("§cBir admin tarafından kalbiniz alındı. Kalan: " + newVal), true);
                             if (newVal <= 0) PlayerDataManager.banPlayer(target);
@@ -126,34 +122,34 @@ public class CommandRegistry {
                 })
             ));
 
-            // /revive <player> - any player can revive another by spending 1 heart; revived player gets 5 hearts and is unbanned
-            dispatcher.register(CommandManager.literal("revive").then(
+            // /revive -> liste gösterir
+            dispatcher.register(CommandManager.literal("revive").executes(ctx -> {
+                ServerPlayerEntity executor;
+                try { executor = ctx.getSource().getPlayerOrThrow(); } catch (Exception ex) { return 0; }
+                var names = PlayerDataManager.getReviveNames();
+                if (names.isEmpty()) {
+                    executor.sendMessage(Text.literal("§7Şu anda revive listesi boş."), true);
+                    return 1;
+                }
+                executor.sendMessage(Text.literal("§eRevive gereken oyuncular:"), true);
+                executor.sendMessage(Text.literal(String.join(", ", names)), true);
+                return 1;
+            }).then(
                 CommandManager.argument("player", EntityArgumentType.player()).executes(context -> {
                     ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
                     ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
-
                     java.util.UUID execId = executor.getUuid();
                     int execHearts = PlayerDataManager.getPlayerHeartCount(execId);
                     if (execHearts < 1) {
                         executor.sendMessage(Text.literal("§cRevive için en az 1 kalp gerekiyor."), true);
                         return 0;
                     }
-
-                    // Deduct 1 heart from executor
                     PlayerDataManager.setPlayerHeartCount(execId, execHearts - 1);
-
-                    // Unban and set target hearts to 5
                     PlayerDataManager.unbanPlayer(target.getUuid());
                     PlayerDataManager.setPlayerHeartCount(target.getUuid(), 5);
-
-                    // Update target attributes
-                    try {
-                        var attr = target.getAttributeInstance(EntityAttributes.MAX_HEALTH);
-                        if (attr != null) attr.setBaseValue(5 * 2.0);
-                        target.setHealth((float) Math.min(target.getHealth(), 5 * 2.0));
-                    } catch (Exception ignored) {}
-
-                    executor.sendMessage(Text.literal("§aBaşarılı: " + target.getName().getString() + " revive edildi. Sizin kalan kalp: " + PlayerDataManager.getPlayerHeartCount(execId)), true);
+                    try { var attr = target.getAttributeInstance(EntityAttributes.MAX_HEALTH); if (attr != null) attr.setBaseValue(5 * 2.0); target.setHealth((float) Math.min(target.getHealth(), 5 * 2.0)); } catch (Exception ignored) {}
+                    PlayerDataManager.removeFromReviveList(target.getUuid());
+                    executor.sendMessage(Text.literal("§aBaşarılı: " + target.getName().getString() + " revive edildi. Kalan kalp: " + PlayerDataManager.getPlayerHeartCount(execId)), true);
                     target.sendMessage(Text.literal("§aSiz revive edildiniz! Kalpleriniz 5 olarak ayarlandı."), true);
                     return 1;
                 })
@@ -272,6 +268,54 @@ public class CommandRegistry {
         });
     }
 
+    private static void setHeartModelData(ItemStack stack, int modelData) {
+        try {
+            java.lang.reflect.Method getOrCreate = ItemStack.class.getMethod("getOrCreateNbt");
+            Object nbt = getOrCreate.invoke(stack);
+            if (nbt instanceof net.minecraft.nbt.NbtCompound) {
+                ((net.minecraft.nbt.NbtCompound) nbt).putInt("CustomModelData", modelData);
+                java.lang.reflect.Method setNbt = ItemStack.class.getMethod("setNbt", net.minecraft.nbt.NbtCompound.class);
+                setNbt.invoke(stack, nbt);
+            }
+        } catch (ReflectiveOperationException ignored) {
+            try {
+                // alternative methods
+                java.lang.reflect.Method getNbt = ItemStack.class.getMethod("getNbt");
+                Object nbt = getNbt.invoke(stack);
+                if (!(nbt instanceof net.minecraft.nbt.NbtCompound)) nbt = new net.minecraft.nbt.NbtCompound();
+                ((net.minecraft.nbt.NbtCompound) nbt).putInt("CustomModelData", modelData);
+                java.lang.reflect.Method setNbt = ItemStack.class.getMethod("setNbt", net.minecraft.nbt.NbtCompound.class);
+                setNbt.invoke(stack, nbt);
+            } catch (ReflectiveOperationException ignored2) {}
+        }
+    }
+
+    // Transfer hearts from one player to another
+    private static int transferHearts(ServerPlayerEntity from, ServerPlayerEntity to, int amount) {
+        java.util.UUID fromId = from.getUuid();
+        java.util.UUID toId = to.getUuid();
+        int fromCount = PlayerDataManager.getPlayerHeartCount(fromId);
+        if (fromCount < amount) {
+            from.sendMessage(Text.literal("§cYeterli kalbiniz yok!"), true);
+            return 0;
+        }
+        int newFrom = Math.max(0, fromCount - amount);
+        int toCount = PlayerDataManager.getPlayerHeartCount(toId);
+        int newTo = toCount + amount;
+
+        PlayerDataManager.setPlayerHeartCount(fromId, newFrom);
+        PlayerDataManager.setPlayerHeartCount(toId, newTo);
+
+        try { var attrFrom = from.getAttributeInstance(EntityAttributes.MAX_HEALTH); if (attrFrom != null) attrFrom.setBaseValue(newFrom * 2.0); } catch (Exception ignored) {}
+        try { var attrTo = to.getAttributeInstance(EntityAttributes.MAX_HEALTH); if (attrTo != null) attrTo.setBaseValue(newTo * 2.0); } catch (Exception ignored) {}
+
+        from.sendMessage(Text.literal("§a" + to.getName().getString() + "'e " + amount + " kalp verdiniz. Kalan: " + newFrom), true);
+        to.sendMessage(Text.literal("§a" + from.getName().getString() + " size " + amount + " kalp verdi. Toplam: " + newTo), true);
+
+        if (newFrom <= 0) PlayerDataManager.banPlayer(from);
+        return 1;
+    }
+
     /**
      * Oyuncunun kalbini düşürüp envanterine "❤ Kalp" itemi verir.
      */
@@ -295,7 +339,9 @@ public class CommandRegistry {
         // Kalp itemini oluştur ve ver
         for (int i = 0; i < amount; i++) {
             ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
+            // ensure display name and model data for custom heart texture
             setHeartDisplayName(heartItem, Text.literal("♥ Kalp"));
+            setHeartModelData(heartItem, 123456);
             executor.getInventory().offerOrDrop(heartItem);
         }
 

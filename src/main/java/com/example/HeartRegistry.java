@@ -11,6 +11,7 @@ public class HeartRegistry {
 
     public static void init() {
         ExampleMod.LOGGER.info("Kalp sistemi başlatılıyor...");
+        // No explicit item registration required; we use Nether Star with model data as a fallback.
     }
 
     public static boolean consume(UUID playerId) {

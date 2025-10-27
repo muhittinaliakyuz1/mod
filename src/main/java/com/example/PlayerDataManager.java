@@ -25,11 +25,13 @@ public class PlayerDataManager {
         public int heartCount;
         public boolean isBanned;
         public long banTime;
+        public String lastKnownName;
 
-        public PlayerData(int heartCount, boolean isBanned, long banTime) {
+        public PlayerData(int heartCount, boolean isBanned, long banTime, String lastKnownName) {
             this.heartCount = heartCount;
             this.isBanned = isBanned;
             this.banTime = banTime;
+            this.lastKnownName = lastKnownName;
         }
 
         public NbtCompound toNbt() {
@@ -37,16 +39,92 @@ public class PlayerDataManager {
             nbt.putInt("heartCount", heartCount);
             nbt.putBoolean("isBanned", isBanned);
             nbt.putLong("banTime", banTime);
+            if (lastKnownName != null) nbt.putString("lastKnownName", lastKnownName);
             return nbt;
         }
 
         public static PlayerData fromNbt(NbtCompound nbt) {
-            if (nbt == null) return new PlayerData(10, false, 0);
-            int heart = nbt.getInt("heartCount").orElse(10);
-            boolean banned = nbt.getBoolean("isBanned").orElse(false);
-            long banTime = nbt.getLong("banTime").orElse(0L);
-            return new PlayerData(heart, banned, banTime);
+            if (nbt == null) return new PlayerData(DEFAULT_HEARTS, false, 0, null);
+            int heart = safeGetInt(nbt, "heartCount", DEFAULT_HEARTS);
+            boolean banned = safeGetBoolean(nbt, "isBanned", false);
+            long banTime = safeGetLong(nbt, "banTime", 0L);
+            String name = safeGetString(nbt, "lastKnownName", null);
+            return new PlayerData(heart, banned, banTime, name);
         }
+    }
+
+    // Helpers for mappings where getX may return Optional<T> or raw T depending on mapping
+    private static int safeGetInt(NbtCompound nbt, String key, int def) {
+        try {
+            java.lang.reflect.Method m = NbtCompound.class.getMethod("getInt", String.class);
+            Object res = m.invoke(nbt, key);
+            if (res instanceof Integer) return (Integer) res;
+            if (res instanceof java.util.Optional) {
+                java.util.Optional<?> o = (java.util.Optional<?>) res;
+                if (o.isPresent()) return ((Number) o.get()).intValue();
+            }
+            // try orElse via reflection
+            try {
+                java.lang.reflect.Method orElse = res.getClass().getMethod("orElse", Object.class);
+                Object v = orElse.invoke(res, def);
+                if (v instanceof Number) return ((Number) v).intValue();
+            } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {}
+        return def;
+    }
+
+    private static boolean safeGetBoolean(NbtCompound nbt, String key, boolean def) {
+        try {
+            java.lang.reflect.Method m = NbtCompound.class.getMethod("getBoolean", String.class);
+            Object res = m.invoke(nbt, key);
+            if (res instanceof Boolean) return (Boolean) res;
+            if (res instanceof java.util.Optional) {
+                java.util.Optional<?> o = (java.util.Optional<?>) res;
+                if (o.isPresent()) return (Boolean) o.get();
+            }
+            try {
+                java.lang.reflect.Method orElse = res.getClass().getMethod("orElse", Object.class);
+                Object v = orElse.invoke(res, def);
+                if (v instanceof Boolean) return (Boolean) v;
+            } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {}
+        return def;
+    }
+
+    private static long safeGetLong(NbtCompound nbt, String key, long def) {
+        try {
+            java.lang.reflect.Method m = NbtCompound.class.getMethod("getLong", String.class);
+            Object res = m.invoke(nbt, key);
+            if (res instanceof Long) return (Long) res;
+            if (res instanceof java.util.Optional) {
+                java.util.Optional<?> o = (java.util.Optional<?>) res;
+                if (o.isPresent()) return ((Number) o.get()).longValue();
+            }
+            try {
+                java.lang.reflect.Method orElse = res.getClass().getMethod("orElse", Object.class);
+                Object v = orElse.invoke(res, def);
+                if (v instanceof Number) return ((Number) v).longValue();
+            } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {}
+        return def;
+    }
+
+    private static String safeGetString(NbtCompound nbt, String key, String def) {
+        try {
+            java.lang.reflect.Method m = NbtCompound.class.getMethod("getString", String.class);
+            Object res = m.invoke(nbt, key);
+            if (res instanceof String) return (String) res;
+            if (res instanceof java.util.Optional) {
+                java.util.Optional<?> o = (java.util.Optional<?>) res;
+                if (o.isPresent()) return (String) o.get();
+            }
+            try {
+                java.lang.reflect.Method orElse = res.getClass().getMethod("orElse", Object.class);
+                Object v = orElse.invoke(res, def);
+                if (v instanceof String) return (String) v;
+            } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {}
+        return def;
     }
 
     public static void initialize(MinecraftServer server) {
@@ -93,7 +171,7 @@ public class PlayerDataManager {
     }
 
     public static PlayerData getPlayerData(UUID id) {
-        return playerData.getOrDefault(id, new PlayerData(10, false, 0));
+        return playerData.getOrDefault(id, new PlayerData(DEFAULT_HEARTS, false, 0, null));
     }
 
     public static int getPlayerHeartCount(UUID id) {
@@ -101,7 +179,7 @@ public class PlayerDataManager {
     }
 
     public static void setPlayerHeartCount(UUID id, int hearts) {
-        PlayerData pd = playerData.getOrDefault(id, new PlayerData(10, false, 0));
+        PlayerData pd = playerData.getOrDefault(id, new PlayerData(DEFAULT_HEARTS, false, 0, null));
         pd.heartCount = hearts;
         playerData.put(id, pd);
         saveData();
@@ -126,12 +204,43 @@ public class PlayerDataManager {
         pd.heartCount = 0;
         pd.isBanned = true;
         pd.banTime = System.currentTimeMillis();
+        pd.lastKnownName = player.getName().getString();
         setPlayerData(id, pd);
+        addToReviveList(id, pd.lastKnownName);
         try {
             player.networkHandler.disconnect(Text.literal("§cSon kalbinizle öldünüz; sunucudan atıldınız."));
         } catch (Exception e) {
             ExampleMod.LOGGER.warn("Ban sırasında disconnect başarısız: ", e);
         }
+    }
+
+    // Revive list management
+    private static final java.util.Set<UUID> reviveList = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
+
+    public static void addToReviveList(UUID id, String name) {
+        reviveList.add(id);
+        PlayerData pd = playerData.getOrDefault(id, new PlayerData(DEFAULT_HEARTS, true, System.currentTimeMillis(), name));
+        if (name != null) pd.lastKnownName = name;
+        playerData.put(id, pd);
+        saveData();
+    }
+
+    public static void removeFromReviveList(UUID id) {
+        reviveList.remove(id);
+    }
+
+    public static java.util.List<String> getReviveNames() {
+        java.util.ArrayList<String> names = new java.util.ArrayList<>();
+        for (UUID id : reviveList) {
+            PlayerData pd = playerData.get(id);
+            if (pd != null && pd.lastKnownName != null) names.add(pd.lastKnownName);
+            else names.add(id.toString());
+        }
+        return names;
+    }
+
+    public static boolean isInReviveList(UUID id) {
+        return reviveList.contains(id);
     }
 
     public static boolean isPlayerBanned(UUID id) {
