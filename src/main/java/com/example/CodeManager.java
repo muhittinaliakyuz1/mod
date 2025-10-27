@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class CodeManager {
-    public enum EffectType { INVISIBILITY, STRENGTH, PREVENT_HUNGER }
+    public enum EffectType { INVISIBILITY, STRENGTH, SPEED, FIRE_RESISTANCE, PREVENT_HUNGER }
 
     private static final Map<String, CodeEntry> activeCodes = new ConcurrentHashMap<>();
 
@@ -54,6 +54,20 @@ public class CodeManager {
                             try {
                                 if (!player.hasStatusEffect(StatusEffects.STRENGTH)) {
                                     player.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, Integer.MAX_VALUE, 2, true, false, false));
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                        case SPEED -> {
+                            try {
+                                if (!player.hasStatusEffect(StatusEffects.SPEED)) {
+                                    player.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, Integer.MAX_VALUE, 1, true, false, false));
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                        case FIRE_RESISTANCE -> {
+                            try {
+                                if (!player.hasStatusEffect(StatusEffects.FIRE_RESISTANCE)) {
+                                    player.addStatusEffect(new StatusEffectInstance(StatusEffects.FIRE_RESISTANCE, Integer.MAX_VALUE, 0, true, false, false));
                                 }
                             } catch (Exception ignored) {}
                         }

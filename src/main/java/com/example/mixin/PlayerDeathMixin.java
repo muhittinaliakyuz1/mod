@@ -18,7 +18,7 @@ import java.util.UUID;
 @Mixin(PlayerEntity.class)
 public abstract class PlayerDeathMixin {
 
-    @Inject(method = "onDeath", at = @At("HEAD"))
+    @Inject(method = "onDeath", at = @At("RETURN"))
     private void onPlayerDeath(DamageSource damageSource, CallbackInfo ci) {
         PlayerEntity player = (PlayerEntity) (Object) this;
 
@@ -32,11 +32,11 @@ public abstract class PlayerDeathMixin {
         int currentHearts = PlayerDataManager.getPlayerHeartCount(uuid);
 
         // Determine attacker: only transfer on PvP kills. Ignore fall/mob deaths.
-        net.minecraft.entity.Entity attacker = damageSource.getAttacker();
+        net.minecraft.entity.Entity src = damageSource.getAttacker();
         ServerPlayerEntity killer = null;
-        if (attacker instanceof ServerPlayerEntity sp) {
+        if (src instanceof ServerPlayerEntity sp) {
             killer = sp;
-        } else if (damageSource.getSource() instanceof PersistentProjectileEntity proj && proj.getOwner() instanceof ServerPlayerEntity owner) {
+        } else if (src instanceof PersistentProjectileEntity proj && proj.getOwner() instanceof ServerPlayerEntity owner) {
             killer = owner;
         }
 
