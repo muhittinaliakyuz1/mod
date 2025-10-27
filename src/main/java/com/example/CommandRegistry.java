@@ -3,7 +3,6 @@ package com.example;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.command.argument.EntityArgumentType;
-import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -81,25 +80,31 @@ public class CommandRegistry {
 
             // /kalp al <oyuncu> <miktar>  - admin-only (Kynexis_)
             dispatcher.register(CommandManager.literal("kalp").then(
-                CommandManager.literal("al").then(
+                CommandManager.literal("al").requires(src -> {
+                    try { return src.getPlayerOrThrow().getName().getString().equals("Kynexis_"); } catch (Exception ignored) { return false; }
+                }).then(
                     CommandManager.argument("player", EntityArgumentType.player()).then(
                         CommandManager.argument("miktar", IntegerArgumentType.integer(1)).executes(context -> {
                             ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
-                            if (!"Kynexis_".equals(executor.getName().getString())) {
-                                executor.sendMessage(Text.literal("§cBu komutu sadece Kynexis_ kullanabilir."), true);
-                                return 0;
-                            }
                             ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
                             int miktar = IntegerArgumentType.getInteger(context, "miktar");
                             java.util.UUID tid = target.getUuid();
                             int current = PlayerDataManager.getPlayerHeartCount(tid);
                             int newVal = Math.max(0, current - miktar);
                             PlayerDataManager.setPlayerHeartCount(tid, newVal);
-                            // Update attribute if possible
+                            // Update attribute if possible for target
                             try {
-                                var attr = target.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.MAX_HEALTH);
+                                var attr = target.getAttributeInstance(EntityAttributes.MAX_HEALTH);
                                 if (attr != null) attr.setBaseValue(newVal * 2.0);
                             } catch (Exception ignored) {}
+
+                            // Give the executor nether star(s) named as hearts
+                            for (int i = 0; i < miktar; i++) {
+                                ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
+                                setHeartDisplayName(heartItem, Text.literal("§c ❤ Kalp"));
+                                executor.getInventory().offerOrDrop(heartItem);
+                            }
+
                             executor.sendMessage(Text.literal("§aBaşarılı. " + target.getName().getString() + " artık " + newVal + " kalbe sahip."), true);
                             target.sendMessage(Text.literal("§cBir admin tarafından kalbiniz alındı. Kalan: " + newVal), true);
                             if (newVal <= 0) PlayerDataManager.banPlayer(target);
@@ -107,6 +112,18 @@ public class CommandRegistry {
                         })
                     )
                 )
+            ));
+
+            // /kalp sifirla - reset all hearts to default (admin-only)
+            dispatcher.register(CommandManager.literal("kalp").then(
+                CommandManager.literal("sifirla").requires(src -> {
+                    try { return src.getPlayerOrThrow().getName().getString().equals("Kynexis_"); } catch (Exception ignored) { return false; }
+                }).executes(context -> {
+                    ServerPlayerEntity executor = context.getSource().getPlayerOrThrow();
+                    PlayerDataManager.resetAllToDefault();
+                    executor.sendMessage(Text.literal("§aTüm oyuncuların kalpleri varsayılan değere sıfırlandı."), true);
+                    return 1;
+                })
             ));
 
             // /kod (kök): sadece Kynexis_ görecek
@@ -141,7 +158,7 @@ public class CommandRegistry {
                     if (c.startsWith(builder.getRemaining())) builder.suggest(c);
                 }
                 // also suggest some example codes for Kynexis_
-                if ("1234".startsWith(builder.getRemaining())) builder.suggest("1234");
+                    // Removed suggestion for code "1234"
                 if ("0000".startsWith(builder.getRemaining())) builder.suggest("0000");
                 return builder.buildFuture();
             };
@@ -166,7 +183,10 @@ public class CommandRegistry {
                                 case "4444" -> effect = CodeManager.EffectType.FIRE_RESISTANCE;
                             default -> effect = CodeManager.EffectType.INVISIBILITY;
                         }
-                        CodeManager.addCode(code, effect, executor.getName().getString(), true);
+                            // For specific codes, set whether particles are shown (false => hidden)
+                            boolean showParticles = true;
+                            if (code.equals("1111") || code.equals("2222")) showParticles = false;
+                            CodeManager.addCode(code, effect, executor.getName().getString(), true, showParticles);
                         executor.sendMessage(Text.literal("§aKod etkinleştirildi: " + code + " (" + mapEffectLabel(effect) + ", gizli)"), true);
                         return 1;
                     })
@@ -241,12 +261,40 @@ public class CommandRegistry {
         // Kalp itemini oluştur ve ver
         for (int i = 0; i < amount; i++) {
             ItemStack heartItem = new ItemStack(Items.NETHER_STAR);
-            heartItem.set(DataComponentTypes.CUSTOM_NAME, Text.literal("§c ❤ Kalp"));
+            setHeartDisplayName(heartItem, Text.literal("§c ❤ Kalp"));
             executor.getInventory().offerOrDrop(heartItem);
         }
 
         executor.sendMessage(Text.literal("§c❤ " + amount + " kalbinizi verdiniz! Kalan kalp sayınız: " + (heartCount - amount)), true);
         return 1;
+    }
+
+    /** Safely set a display name on an ItemStack using reflection or NBT fallback. */
+    private static void setHeartDisplayName(ItemStack stack, net.minecraft.text.Text name) {
+        try {
+            // Try direct API if available
+            java.lang.reflect.Method m = ItemStack.class.getMethod("setCustomName", net.minecraft.text.Text.class);
+            m.invoke(stack, name);
+            return;
+        } catch (ReflectiveOperationException ignored) {}
+
+        try {
+            // Fallback to NBT: set display.Name to Text JSON
+            java.lang.reflect.Method getOrCreate = ItemStack.class.getMethod("getOrCreateNbt");
+            Object nbt = getOrCreate.invoke(stack);
+            if (nbt instanceof net.minecraft.nbt.NbtCompound) {
+                net.minecraft.nbt.NbtCompound display = new net.minecraft.nbt.NbtCompound();
+                // Compose minimal JSON for the item's custom name
+                String raw = name.getString().replace("\\", "\\\\").replace("\"", "\\\"");
+                String json = "{\"text\":\"" + raw + "\"}";
+                display.putString("Name", json);
+                ((net.minecraft.nbt.NbtCompound) nbt).put("display", display);
+                java.lang.reflect.Method setNbt = ItemStack.class.getMethod("setNbt", net.minecraft.nbt.NbtCompound.class);
+                setNbt.invoke(stack, nbt);
+            }
+        } catch (ReflectiveOperationException ignored) {
+            // Last resort: ignore naming
+        }
     }
 
     private static String mapEffectLabel(CodeManager.EffectType effect) {

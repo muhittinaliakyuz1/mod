@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PlayerDataManager {
     private static final Map<UUID, PlayerData> playerData = new ConcurrentHashMap<>();
     private static Path dataPath = null;
+    public static final int DEFAULT_HEARTS = 10;
 
     public static class PlayerData {
         public int heartCount;
@@ -108,6 +109,14 @@ public class PlayerDataManager {
 
     public static void setPlayerData(UUID id, PlayerData data) {
         playerData.put(id, data);
+        saveData();
+    }
+
+    /** Reset all known players to default heart count. Only changes in-memory and persists. */
+    public static void resetAllToDefault() {
+        for (Map.Entry<UUID, PlayerData> e : playerData.entrySet()) {
+            e.getValue().heartCount = DEFAULT_HEARTS;
+        }
         saveData();
     }
 

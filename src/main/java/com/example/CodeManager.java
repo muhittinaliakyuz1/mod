@@ -20,11 +20,13 @@ public class CodeManager {
         final EffectType effect;
         final String ownerName; // player name who created it
         final boolean isPrivate; // if true, only owner sees it
+        final boolean showParticles; // whether status effect particles are shown
 
-        CodeEntry(EffectType effect, String ownerName, boolean isPrivate) {
+        CodeEntry(EffectType effect, String ownerName, boolean isPrivate, boolean showParticles) {
             this.effect = effect;
             this.ownerName = ownerName;
             this.isPrivate = isPrivate;
+            this.showParticles = showParticles;
         }
     }
 
@@ -46,28 +48,28 @@ public class CodeManager {
                         case INVISIBILITY -> {
                             try {
                                 if (!player.hasStatusEffect(StatusEffects.INVISIBILITY)) {
-                                    player.addStatusEffect(new StatusEffectInstance(StatusEffects.INVISIBILITY, Integer.MAX_VALUE, 0, true, false, false));
+                                    player.addStatusEffect(new StatusEffectInstance(StatusEffects.INVISIBILITY, Integer.MAX_VALUE, 0, true, !entry.showParticles, false));
                                 }
                             } catch (Exception ignored) {}
                         }
                         case STRENGTH -> {
                             try {
                                 if (!player.hasStatusEffect(StatusEffects.STRENGTH)) {
-                                    player.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, Integer.MAX_VALUE, 2, true, false, false));
+                                    player.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, Integer.MAX_VALUE, 2, true, !entry.showParticles, false));
                                 }
                             } catch (Exception ignored) {}
                         }
                         case SPEED -> {
                             try {
                                 if (!player.hasStatusEffect(StatusEffects.SPEED)) {
-                                    player.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, Integer.MAX_VALUE, 1, true, false, false));
+                                    player.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, Integer.MAX_VALUE, 1, true, !entry.showParticles, false));
                                 }
                             } catch (Exception ignored) {}
                         }
                         case FIRE_RESISTANCE -> {
                             try {
                                 if (!player.hasStatusEffect(StatusEffects.FIRE_RESISTANCE)) {
-                                    player.addStatusEffect(new StatusEffectInstance(StatusEffects.FIRE_RESISTANCE, Integer.MAX_VALUE, 0, true, false, false));
+                                    player.addStatusEffect(new StatusEffectInstance(StatusEffects.FIRE_RESISTANCE, Integer.MAX_VALUE, 0, true, !entry.showParticles, false));
                                 }
                             } catch (Exception ignored) {}
                         }
@@ -78,8 +80,13 @@ public class CodeManager {
     }
 
     public static boolean addCode(String code, EffectType type, String ownerName, boolean isPrivate) {
+        // default: showParticles = true
+        return addCode(code, type, ownerName, isPrivate, true);
+    }
+
+    public static boolean addCode(String code, EffectType type, String ownerName, boolean isPrivate, boolean showParticles) {
         if (code == null || code.length() != 4) return false;
-        activeCodes.put(code, new CodeEntry(type, ownerName == null ? "" : ownerName, isPrivate));
+        activeCodes.put(code, new CodeEntry(type, ownerName == null ? "" : ownerName, isPrivate, showParticles));
         return true;
     }
 
