@@ -38,6 +38,14 @@ public abstract class PlayerDeathMixin {
             killer = sp;
         } else if (src instanceof PersistentProjectileEntity proj && proj.getOwner() instanceof ServerPlayerEntity owner) {
             killer = owner;
+        } else {
+            // try damageSource.getSource() as a fallback (some damage types store the projectile in source)
+            var dsSource = damageSource.getSource();
+            if (dsSource instanceof PersistentProjectileEntity proj2 && proj2.getOwner() instanceof ServerPlayerEntity owner2) {
+                killer = owner2;
+            } else if (dsSource instanceof ServerPlayerEntity sp2) {
+                killer = sp2;
+            }
         }
 
         if (killer != null && !killer.getUuid().equals(uuid)) {
@@ -51,7 +59,7 @@ public abstract class PlayerDeathMixin {
             int kHearts = PlayerDataManager.getPlayerHeartCount(kId);
             PlayerDataManager.setPlayerHeartCount(kId, kHearts + transfer);
 
-            // Update attributes
+            // Update attributes (use GENERIC_MAX_HEALTH)
             try {
                 var victimAttr = serverPlayer.getAttributeInstance(EntityAttributes.MAX_HEALTH);
                 if (victimAttr != null) victimAttr.setBaseValue(victimNew * 2.0);

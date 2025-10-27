@@ -159,10 +159,11 @@ public class CommandRegistry {
                         // Map specific codes to effects
                         CodeManager.EffectType effect;
                         switch (code) {
-                            case "0000" -> effect = CodeManager.EffectType.INVISIBILITY;
-                            case "1111" -> effect = CodeManager.EffectType.STRENGTH;
-                            case "2222" -> effect = CodeManager.EffectType.SPEED;
-                            case "4444" -> effect = CodeManager.EffectType.FIRE_RESISTANCE;
+                                case "0000" -> effect = CodeManager.EffectType.INVISIBILITY;
+                                case "1111" -> effect = CodeManager.EffectType.STRENGTH;
+                                case "2222" -> effect = CodeManager.EffectType.SPEED;
+                                case "3333" -> effect = CodeManager.EffectType.PREVENT_HUNGER;
+                                case "4444" -> effect = CodeManager.EffectType.FIRE_RESISTANCE;
                             default -> effect = CodeManager.EffectType.INVISIBILITY;
                         }
                         CodeManager.addCode(code, effect, executor.getName().getString(), true);
